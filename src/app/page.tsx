@@ -28,21 +28,21 @@ export default function Home() {
             transition={{ duration: 2, repeat: Infinity }}
           >
             <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-            <span className="text-orange-400 text-sm font-medium">NYSE • NASDAQ Live</span>
+            <span className="text-orange-400 text-sm font-medium">NSE • BSE Live</span>
           </motion.div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-4 tracking-tight">
             <span className="bg-gradient-to-r from-white via-orange-200 to-orange-300 bg-clip-text text-transparent">
-              AI Stock
+              AI Indian
             </span>
             <br />
             <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-              Market
+              Stock Market
             </span>
           </h1>
           
           <p className="text-gray-400 text-lg max-w-md mx-auto">
-            Real-time AI-powered stock market analysis
+            Real-time AI-powered Indian stock market analysis
           </p>
         </motion.div>
 
@@ -57,10 +57,10 @@ export default function Home() {
           className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 w-full max-w-4xl"
         >
           {[
-            { label: "S&P 500", value: "$5,234", change: "+0.82%" },
-            { label: "DOW JONES", value: "$39,150", change: "+0.67%" },
-            { label: "NASDAQ", value: "$16,420", change: "-0.24%" },
-            { label: "Market Cap", value: "$48.2T", change: "+1.2%" },
+            { label: "NIFTY 50", value: "₹22,420", change: "+0.82%" },
+            { label: "SENSEX", value: "₹73,850", change: "+0.67%" },
+            { label: "NIFTY Bank", value: "₹47,320", change: "-0.24%" },
+            { label: "Market Cap", value: "₹385T", change: "+1.2%" },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
