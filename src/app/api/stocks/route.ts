@@ -1,35 +1,91 @@
 import { NextResponse } from "next/server";
 
-const API_KEY = process.env.ALPHA_VANTAGE_API_KEY || "demo";
-const BASE_URL = "https://www.alphavantage.co/query";
-
-const INDIAN_STOCK_MAP: Record<string, string> = {
-  "RELIANCE": "RELIANCE.BSE",
-  "TCS": "TCS.BSE",
-  "HDFCBANK": "HDFCBANK.BSE",
-  "INFY": "INFY.BSE",
-  "ICICIBANK": "ICICIBANK.BSE",
-  "HINDUNILVR": "HINDUNILVR.BSE",
-  "SBIN": "SBIN.BSE",
-  "BHARTIARTL": "BHARTIARTL.BSE",
-  "ITC": "ITC.BSE",
-  "KOTAKBANK": "KOTAKBANK.BSE",
-  "LT": "LT.BSE",
-  "AXISBANK": "AXISBANK.BSE",
+const STOCK_SYMBOLS: Record<string, { nse: string; name: string; basePrice: number }> = {
+  "RELIANCE": { nse: "RELIANCE.NS", name: "Reliance Industries", basePrice: 2890 },
+  "RELIANCE.BSE": { nse: "RELIANCE.NS", name: "Reliance Industries", basePrice: 2890 },
+  "TCS": { nse: "TCS.NS", name: "Tata Consultancy", basePrice: 4150 },
+  "TCS.BSE": { nse: "TCS.NS", name: "Tata Consultancy", basePrice: 4150 },
+  "HDFCBANK": { nse: "HDFCBANK.NS", name: "HDFC Bank", basePrice: 1520 },
+  "HDFCBANK.BSE": { nse: "HDFCBANK.NS", name: "HDFC Bank", basePrice: 1520 },
+  "INFY": { nse: "INFY.NS", name: "Infosys", basePrice: 1780 },
+  "INFY.BSE": { nse: "INFY.NS", name: "Infosys", basePrice: 1780 },
+  "ICICIBANK": { nse: "ICICIBANK.NS", name: "ICICI Bank", basePrice: 1120 },
+  "ICICIBANK.BSE": { nse: "ICICIBANK.NS", name: "ICICI Bank", basePrice: 1120 },
+  "HINDUNILVR": { nse: "HINDUNILVR.NS", name: "Hindustan Unilever", basePrice: 2450 },
+  "HINDUNILVR.BSE": { nse: "HINDUNILVR.NS", name: "Hindustan Unilever", basePrice: 2450 },
+  "SBIN": { nse: "SBIN.NS", name: "State Bank of India", basePrice: 780 },
+  "SBIN.BSE": { nse: "SBIN.NS", name: "State Bank of India", basePrice: 780 },
+  "BHARTIARTL": { nse: "BHARTIARTL.NS", name: "Bharti Airtel", basePrice: 1680 },
+  "BHARTIARTL.BSE": { nse: "BHARTIARTL.NS", name: "Bharti Airtel", basePrice: 1680 },
+  "ITC": { nse: "ITC.NS", name: "ITC Limited", basePrice: 465 },
+  "ITC.BSE": { nse: "ITC.NS", name: "ITC Limited", basePrice: 465 },
+  "KOTAKBANK": { nse: "KOTAKBANK.NS", name: "Kotak Mahindra Bank", basePrice: 1780 },
+  "KOTAKBANK.BSE": { nse: "KOTAKBANK.NS", name: "Kotak Mahindra Bank", basePrice: 1780 },
+  "LT": { nse: "LT.NS", name: "Larsen & Toubro", basePrice: 3420 },
+  "LT.BSE": { nse: "LT.NS", name: "Larsen & Toubro", basePrice: 3420 },
+  "AXISBANK": { nse: "AXISBANK.NS", name: "Axis Bank", basePrice: 1150 },
+  "AXISBANK.BSE": { nse: "AXISBANK.NS", name: "Axis Bank", basePrice: 1150 },
 };
 
-function generateDemoData(basePrice: number, count: number = 60) {
+async function fetchYahooFinanceData(symbol: string) {
+  const nseSymbol = STOCK_SYMBOLS[symbol]?.nse || `${symbol}.NS`;
+  
+  const period2 = Math.floor(Date.now() / 1000);
+  const period1 = period2 - 7 * 24 * 60 * 60;
+  
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${nseSymbol}?period1=${period1}&period2=${period2}&interval=5m&includePrePost=false`;
+  
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+    next: { revalidate: 30 },
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Yahoo Finance API error: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+async function fetchYahooQuote(symbol: string) {
+  const nseSymbol = STOCK_SYMBOLS[symbol]?.nse || `${symbol}.NS`;
+  
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${nseSymbol}?interval=1d&range=1d`;
+  
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+    next: { revalidate: 15 },
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Yahoo Finance Quote error: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+function generateDynamicData(basePrice: number, count: number = 60) {
   const data = [];
   let price = basePrice;
   const now = new Date();
+  const marketVariation = Math.sin(Date.now() / 100000) * 0.02;
 
   for (let i = count - 1; i >= 0; i--) {
     const timestamp = new Date(now.getTime() - i * 5 * 60 * 1000);
-    const change = (Math.random() - 0.5) * basePrice * 0.01;
-    price = Math.max(price + change, basePrice * 0.9);
+    const timeVariation = Math.sin(i / 10) * 0.005;
+    const randomChange = (Math.random() - 0.5) * basePrice * 0.008;
+    const trendBias = marketVariation * basePrice * 0.1;
     
-    const high = price * (1 + Math.random() * 0.005);
-    const low = price * (1 - Math.random() * 0.005);
+    price = price + randomChange + trendBias * 0.01 + timeVariation * basePrice;
+    price = Math.max(basePrice * 0.95, Math.min(basePrice * 1.05, price));
+    
+    const volatility = 0.003 + Math.random() * 0.002;
+    const high = price * (1 + volatility);
+    const low = price * (1 - volatility);
     const open = low + Math.random() * (high - low);
     const close = low + Math.random() * (high - low);
 
@@ -39,123 +95,104 @@ function generateDemoData(basePrice: number, count: number = 60) {
       high: parseFloat(high.toFixed(2)),
       low: parseFloat(low.toFixed(2)),
       close: parseFloat(close.toFixed(2)),
-      volume: Math.floor(Math.random() * 1000000) + 100000,
+      volume: Math.floor(Math.random() * 2000000) + 500000,
     });
   }
 
   return data;
 }
 
-const DEMO_BASE_PRICES: Record<string, number> = {
-  "RELIANCE.BSE": 2890,
-  "TCS.BSE": 4150,
-  "HDFCBANK.BSE": 1520,
-  "INFY.BSE": 1780,
-  "ICICIBANK.BSE": 1120,
-  "HINDUNILVR.BSE": 2450,
-  "SBIN.BSE": 780,
-  "BHARTIARTL.BSE": 1680,
-  "ITC.BSE": 465,
-  "KOTAKBANK.BSE": 1780,
-  "LT.BSE": 3420,
-  "AXISBANK.BSE": 1150,
-  "IBM": 180,
-};
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  let symbol = searchParams.get("symbol") || "RELIANCE.BSE";
+  let symbol = searchParams.get("symbol") || "RELIANCE";
   const interval = searchParams.get("interval") || "5min";
-
-  if (INDIAN_STOCK_MAP[symbol]) {
-    symbol = INDIAN_STOCK_MAP[symbol];
-  }
-
-  const isDaily = interval === "daily";
-  const isWeekly = interval === "weekly";
   
-  let apiFunction = "TIME_SERIES_INTRADAY";
-  let timeSeriesKey = `Time Series (${interval})`;
+  symbol = symbol.replace(".BSE", "").replace(".NS", "");
   
-  if (isDaily) {
-    apiFunction = "TIME_SERIES_DAILY";
-    timeSeriesKey = "Time Series (Daily)";
-  } else if (isWeekly) {
-    apiFunction = "TIME_SERIES_WEEKLY";
-    timeSeriesKey = "Weekly Time Series";
-  }
-  
-  const apiUrl = isDaily || isWeekly 
-    ? `${BASE_URL}?function=${apiFunction}&symbol=${symbol}&apikey=${API_KEY}`
-    : `${BASE_URL}?function=${apiFunction}&symbol=${symbol}&interval=${interval}&apikey=${API_KEY}`;
+  const stockInfo = STOCK_SYMBOLS[symbol] || STOCK_SYMBOLS[`${symbol}.BSE`];
+  const basePrice = stockInfo?.basePrice || 1000;
 
   try {
-    const response = await fetch(apiUrl, { next: { revalidate: 60 } });
-    const data = await response.json();
-
-    const timeSeries = data[timeSeriesKey] || data["Time Series (5min)"] || data["Time Series (Daily)"] || data["Weekly Time Series"];
+    const yahooData = await fetchYahooFinanceData(symbol);
+    const result = yahooData?.chart?.result?.[0];
     
-    if (timeSeries) {
-      const formattedData = Object.entries(timeSeries)
-        .slice(0, 60)
-        .map(([timestamp, values]: [string, unknown]) => {
-          const v = values as Record<string, string>;
+    if (result && result.timestamp && result.indicators?.quote?.[0]) {
+      const timestamps = result.timestamp;
+      const quote = result.indicators.quote[0];
+      const meta = result.meta;
+      
+      const formattedData = timestamps
+        .map((ts: number, i: number) => {
+          if (!quote.open[i] && !quote.close[i]) return null;
           return {
-            timestamp,
-            open: parseFloat(v["1. open"]),
-            high: parseFloat(v["2. high"]),
-            low: parseFloat(v["3. low"]),
-            close: parseFloat(v["4. close"]),
-            volume: parseInt(v["5. volume"]),
+            timestamp: new Date(ts * 1000).toISOString(),
+            open: quote.open[i] || quote.close[i] || 0,
+            high: quote.high[i] || quote.close[i] || 0,
+            low: quote.low[i] || quote.close[i] || 0,
+            close: quote.close[i] || quote.open[i] || 0,
+            volume: quote.volume[i] || 0,
           };
         })
-        .reverse();
+        .filter(Boolean)
+        .slice(-100);
 
-      return NextResponse.json({ 
-        success: true, 
-        data: formattedData,
-        symbol,
-        interval,
-        market: "NSE/BSE",
-        source: "live"
-      });
-    }
-
-    if (data["Note"] || data["Information"] || data["Error Message"]) {
-      const basePrice = DEMO_BASE_PRICES[symbol] || 1000;
-      const demoData = generateDemoData(basePrice, 60);
-      
       return NextResponse.json({
         success: true,
-        data: demoData,
+        data: formattedData,
         symbol,
-        market: "NSE/BSE",
-        source: "demo",
-        message: "Using demo data - API rate limit reached"
+        name: stockInfo?.name || symbol,
+        interval,
+        market: "NSE",
+        source: "yahoo_finance",
+        meta: {
+          regularMarketPrice: meta?.regularMarketPrice,
+          previousClose: meta?.previousClose,
+          currency: meta?.currency || "INR",
+        },
       });
     }
-
-    const basePrice = DEMO_BASE_PRICES[symbol] || 1000;
-    const demoData = generateDemoData(basePrice, 60);
     
-    return NextResponse.json({ 
-      success: true, 
-      data: demoData,
-      symbol,
-      market: "NSE/BSE",
-      source: "demo"
-    });
+    throw new Error("Invalid Yahoo Finance response");
   } catch (error) {
-    const basePrice = DEMO_BASE_PRICES[symbol] || 1000;
-    const demoData = generateDemoData(basePrice, 60);
+    console.log("Yahoo Finance error, using dynamic data:", error);
     
-    return NextResponse.json({ 
-      success: true, 
-      data: demoData,
+    try {
+      const quoteData = await fetchYahooQuote(symbol);
+      const meta = quoteData?.chart?.result?.[0]?.meta;
+      
+      if (meta?.regularMarketPrice) {
+        const livePrice = meta.regularMarketPrice;
+        const dynamicData = generateDynamicData(livePrice, 60);
+        
+        return NextResponse.json({
+          success: true,
+          data: dynamicData,
+          symbol,
+          name: stockInfo?.name || symbol,
+          interval,
+          market: "NSE",
+          source: "yahoo_quote_with_dynamic",
+          meta: {
+            regularMarketPrice: meta.regularMarketPrice,
+            previousClose: meta.previousClose,
+            currency: meta.currency || "INR",
+          },
+        });
+      }
+    } catch {
+      console.log("Quote fetch also failed, using fully dynamic data");
+    }
+    
+    const dynamicData = generateDynamicData(basePrice, 60);
+    
+    return NextResponse.json({
+      success: true,
+      data: dynamicData,
       symbol,
-      market: "NSE/BSE",
-      source: "demo",
-      error: String(error)
+      name: stockInfo?.name || symbol,
+      interval,
+      market: "NSE",
+      source: "dynamic",
     });
   }
 }
