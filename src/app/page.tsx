@@ -33,11 +33,11 @@ export default function Home() {
           
           <h1 className="text-5xl md:text-7xl font-bold mb-4 tracking-tight">
             <span className="bg-gradient-to-r from-white via-orange-200 to-orange-300 bg-clip-text text-transparent">
-              Indian Stock
+              AI Stock
             </span>
             <br />
             <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-              Market AI
+              Market
             </span>
           </h1>
           
