@@ -44,27 +44,29 @@ export async function GET(request: Request) {
   }
 
   try {
-    const yahooData = await searchYahoo(`${query} ${market === "IN" ? "NSE BSE" : ""}`);
+    const yahooData = await searchYahoo(query, market);
     const quotes = yahooData?.quotes || [];
 
     const results = quotes
-      .filter((q: { exchange?: string; quoteType?: string }) => {
+      .filter((q: { exchange?: string; quoteType?: string; symbol?: string }) => {
         if (market === "IN") {
           return (
+            q.symbol?.endsWith(".NS") ||
+            q.symbol?.endsWith(".BO") ||
             q.exchange === "NSI" ||
             q.exchange === "BSE" ||
             q.exchange === "NSE" ||
-            q.quoteType === "EQUITY"
+            q.exchange === "BOM"
           );
         }
         return q.quoteType === "EQUITY";
       })
       .map((q: { symbol?: string; shortname?: string; longname?: string; exchange?: string; quoteType?: string }) => ({
         symbol: q.symbol?.replace(".NS", "").replace(".BO", "") || "",
-        name: q.shortname || q.longname || q.symbol || "",
-        exchange: q.exchange === "NSI" ? "NSE" : q.exchange || "NSE",
+        name: q.shortname || q.longname || q.symbol?.replace(".NS", "").replace(".BO", "") || "",
+        exchange: q.symbol?.endsWith(".NS") ? "NSE" : q.symbol?.endsWith(".BO") ? "BSE" : q.exchange === "NSI" ? "NSE" : q.exchange || "NSE",
         type: q.quoteType || "Stock",
-      }));
+      }))
 
     return NextResponse.json({
       success: true,
