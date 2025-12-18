@@ -57,10 +57,10 @@ export default function Home() {
           className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 w-full max-w-4xl"
         >
           {[
-            { label: "NIFTY 50", value: "₹22,147", change: "+0.82%" },
-            { label: "SENSEX", value: "₹72,985", change: "+0.67%" },
-            { label: "NIFTY Bank", value: "₹47,892", change: "-0.24%" },
-            { label: "Market Cap", value: "₹387L Cr", change: "+1.2%" },
+            { label: "S&P 500", value: "$5,234", change: "+0.82%" },
+            { label: "DOW JONES", value: "$39,150", change: "+0.67%" },
+            { label: "NASDAQ", value: "$16,420", change: "-0.24%" },
+            { label: "Market Cap", value: "$48.2T", change: "+1.2%" },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
