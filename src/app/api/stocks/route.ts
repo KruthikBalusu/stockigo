@@ -18,6 +18,50 @@ const INDIAN_STOCK_MAP: Record<string, string> = {
   "AXISBANK": "AXISBANK.BSE",
 };
 
+function generateDemoData(basePrice: number, count: number = 60) {
+  const data = [];
+  let price = basePrice;
+  const now = new Date();
+
+  for (let i = count - 1; i >= 0; i--) {
+    const timestamp = new Date(now.getTime() - i * 5 * 60 * 1000);
+    const change = (Math.random() - 0.5) * basePrice * 0.01;
+    price = Math.max(price + change, basePrice * 0.9);
+    
+    const high = price * (1 + Math.random() * 0.005);
+    const low = price * (1 - Math.random() * 0.005);
+    const open = low + Math.random() * (high - low);
+    const close = low + Math.random() * (high - low);
+
+    data.push({
+      timestamp: timestamp.toISOString(),
+      open: parseFloat(open.toFixed(2)),
+      high: parseFloat(high.toFixed(2)),
+      low: parseFloat(low.toFixed(2)),
+      close: parseFloat(close.toFixed(2)),
+      volume: Math.floor(Math.random() * 1000000) + 100000,
+    });
+  }
+
+  return data;
+}
+
+const DEMO_BASE_PRICES: Record<string, number> = {
+  "RELIANCE.BSE": 2890,
+  "TCS.BSE": 4150,
+  "HDFCBANK.BSE": 1520,
+  "INFY.BSE": 1780,
+  "ICICIBANK.BSE": 1120,
+  "HINDUNILVR.BSE": 2450,
+  "SBIN.BSE": 780,
+  "BHARTIARTL.BSE": 1680,
+  "ITC.BSE": 465,
+  "KOTAKBANK.BSE": 1780,
+  "LT.BSE": 3420,
+  "AXISBANK.BSE": 1150,
+  "IBM": 180,
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   let symbol = searchParams.get("symbol") || "RELIANCE.BSE";
@@ -56,7 +100,8 @@ export async function GET(request: Request) {
         success: true, 
         data: formattedData,
         symbol,
-        market: "NSE/BSE"
+        market: "NSE/BSE",
+        source: "live"
       });
     }
 
@@ -81,20 +126,46 @@ export async function GET(request: Request) {
         success: true, 
         data: formattedData,
         symbol,
-        market: "NSE/BSE"
+        market: "NSE/BSE",
+        source: "live"
       });
     }
 
-    if (data["Note"] || data["Information"]) {
+    if (data["Note"] || data["Information"] || data["Error Message"]) {
+      const basePrice = DEMO_BASE_PRICES[symbol] || 1000;
+      const demoData = generateDemoData(basePrice, 60);
+      
       return NextResponse.json({
-        success: false,
-        error: "API rate limit reached",
-        message: data["Note"] || data["Information"],
+        success: true,
+        data: demoData,
+        symbol,
+        market: "NSE/BSE",
+        source: "demo",
+        message: "Using demo data - API rate limit reached"
       });
     }
 
-    return NextResponse.json({ success: false, error: "No data available", raw: data });
+    const basePrice = DEMO_BASE_PRICES[symbol] || 1000;
+    const demoData = generateDemoData(basePrice, 60);
+    
+    return NextResponse.json({ 
+      success: true, 
+      data: demoData,
+      symbol,
+      market: "NSE/BSE",
+      source: "demo"
+    });
   } catch (error) {
-    return NextResponse.json({ success: false, error: String(error) });
+    const basePrice = DEMO_BASE_PRICES[symbol] || 1000;
+    const demoData = generateDemoData(basePrice, 60);
+    
+    return NextResponse.json({ 
+      success: true, 
+      data: demoData,
+      symbol,
+      market: "NSE/BSE",
+      source: "demo",
+      error: String(error)
+    });
   }
 }
