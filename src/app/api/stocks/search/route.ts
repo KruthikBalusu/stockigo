@@ -67,6 +67,9 @@ export async function GET(request: Request) {
         exchange: q.symbol?.endsWith(".NS") ? "NSE" : q.symbol?.endsWith(".BO") ? "BSE" : q.exchange === "NSI" ? "NSE" : q.exchange || "NSE",
         type: q.quoteType || "Stock",
       }))
+      .filter((r: { symbol: string }, index: number, self: { symbol: string }[]) => 
+        r.symbol && self.findIndex(s => s.symbol === r.symbol) === index
+      );
 
     return NextResponse.json({
       success: true,
