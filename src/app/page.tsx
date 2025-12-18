@@ -28,7 +28,7 @@ export default function Home() {
             transition={{ duration: 2, repeat: Infinity }}
           >
             <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-            <span className="text-orange-400 text-sm font-medium">NSE • BSE Live</span>
+            <span className="text-orange-400 text-sm font-medium">NYSE • NASDAQ Live</span>
           </motion.div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-4 tracking-tight">
