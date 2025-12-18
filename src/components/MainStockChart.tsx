@@ -1,27 +1,79 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { INDIAN_STOCKS, generateRealisticStockData, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
 
-const selectedStock = INDIAN_STOCKS[0];
+const DEMO_STOCKS = [
+  { symbol: "IBM", name: "IBM Corporation", basePrice: 180 },
+  { symbol: "AAPL", name: "Apple Inc", basePrice: 175 },
+  { symbol: "MSFT", name: "Microsoft Corp", basePrice: 420 },
+  { symbol: "GOOGL", name: "Alphabet Inc", basePrice: 175 },
+  { symbol: "AMZN", name: "Amazon.com Inc", basePrice: 185 },
+  { symbol: "TSLA", name: "Tesla Inc", basePrice: 245 },
+];
 
 export function MainStockChart() {
   const [data, setData] = useState<TimeSeriesData[]>([]);
-  const [currentPrice, setCurrentPrice] = useState(selectedStock.basePrice);
-  const [openPrice] = useState(selectedStock.basePrice);
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [openPrice, setOpenPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [selectedStockIndex, setSelectedStockIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [useRealData, setUseRealData] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const lastFetchRef = useRef<number>(0);
+
+  const stocks = useRealData ? DEMO_STOCKS : INDIAN_STOCKS;
+  const stock = stocks[selectedStockIndex];
+
+  const fetchStockData = useCallback(async (symbol: string) => {
+    const now = Date.now();
+    if (now - lastFetchRef.current < 60000 && data.length > 0) {
+      return;
+    }
+
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const response = await fetch(`/api/stocks?symbol=${symbol}&interval=5min`);
+      const result = await response.json();
+
+      if (result.success && result.data?.length > 0) {
+        lastFetchRef.current = now;
+        setData(result.data);
+        const firstPrice = result.data[0]?.open || 0;
+        const lastPrice = result.data[result.data.length - 1]?.close || 0;
+        setOpenPrice(firstPrice);
+        setCurrentPrice(lastPrice);
+        setPriceChange(((lastPrice - firstPrice) / firstPrice) * 100);
+        setUseRealData(true);
+      } else {
+        setApiError(result.error || "Failed to fetch");
+        const fallbackData = generateRealisticStockData(stock.basePrice, 60);
+        setData(fallbackData);
+        const lastPrice = fallbackData[fallbackData.length - 1]?.close || stock.basePrice;
+        setOpenPrice(stock.basePrice);
+        setCurrentPrice(lastPrice);
+        setPriceChange(((lastPrice - stock.basePrice) / stock.basePrice) * 100);
+      }
+    } catch {
+      setApiError("Network error");
+      const fallbackData = generateRealisticStockData(stock.basePrice, 60);
+      setData(fallbackData);
+      setOpenPrice(stock.basePrice);
+      setCurrentPrice(fallbackData[fallbackData.length - 1]?.close || stock.basePrice);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [data.length, stock.basePrice]);
 
   useEffect(() => {
-    const stock = INDIAN_STOCKS[selectedStockIndex];
-    const initialData = generateRealisticStockData(stock.basePrice, 60);
-    setData(initialData);
-    const lastPrice = initialData[initialData.length - 1]?.close || stock.basePrice;
-    setCurrentPrice(lastPrice);
-    setPriceChange(((lastPrice - stock.basePrice) / stock.basePrice) * 100);
-  }, [selectedStockIndex]);
+    const s = stocks[selectedStockIndex];
+    fetchStockData(s.symbol);
+  }, [selectedStockIndex, stocks, fetchStockData]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -29,7 +81,7 @@ export function MainStockChart() {
         if (prev.length === 0) return prev;
         const lastPrice = prev[prev.length - 1].close;
         const newPrice = generateLivePrice(lastPrice);
-        
+
         setCurrentPrice(newPrice);
         setPriceChange(((newPrice - openPrice) / openPrice) * 100);
 
@@ -73,7 +125,7 @@ export function MainStockChart() {
 
   const isPositive = priceChange >= 0;
   const mainColor = isPositive ? "#00ff88" : "#ff4444";
-  const stock = INDIAN_STOCKS[selectedStockIndex];
+  const currencySymbol = useRealData ? "$" : "₹";
 
   return (
     <motion.div
@@ -84,7 +136,7 @@ export function MainStockChart() {
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2 flex-wrap">
-          {INDIAN_STOCKS.slice(0, 6).map((s, i) => (
+          {stocks.slice(0, 6).map((s, i) => (
             <button
               key={s.symbol}
               onClick={() => setSelectedStockIndex(i)}
@@ -94,40 +146,51 @@ export function MainStockChart() {
                   : "text-gray-500 hover:text-white hover:bg-white/5 border border-transparent"
               }`}
             >
-              {s.symbol.replace(".BSE", "")}
+              {s.symbol}
             </button>
           ))}
         </div>
+        {apiError && (
+          <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded">
+            Demo Mode
+          </span>
+        )}
       </div>
 
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">{stock.symbol.replace(".BSE", "").slice(0, 3)}</span>
+              <span className="text-white font-bold text-xs">{stock.symbol.slice(0, 3)}</span>
             </div>
             <div>
               <h2 className="text-white font-bold text-xl tracking-tight">{stock.name}</h2>
-              <p className="text-gray-500 text-sm">{stock.symbol} • NSE/BSE</p>
+              <p className="text-gray-500 text-sm">{stock.symbol} • {useRealData ? "NYSE/NASDAQ" : "NSE/BSE"}</p>
             </div>
           </div>
         </div>
         <div className="text-right">
-          <motion.div
-            key={currentPrice}
-            initial={{ scale: 1.05 }}
-            animate={{ scale: 1 }}
-            className="text-3xl font-bold text-white font-mono"
-          >
-            ₹{currentPrice.toFixed(2)}
-          </motion.div>
-          <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
-            <span>{isPositive ? "▲" : "▼"}</span>
-            <span className="font-mono">{Math.abs(priceChange).toFixed(2)}%</span>
-            <span className="text-gray-500 text-sm ml-2">
-              ({isPositive ? "+" : ""}₹{((currentPrice - openPrice)).toFixed(2)})
-            </span>
-          </div>
+          {isLoading ? (
+            <div className="h-10 w-32 bg-white/10 animate-pulse rounded" />
+          ) : (
+            <>
+              <motion.div
+                key={currentPrice}
+                initial={{ scale: 1.05 }}
+                animate={{ scale: 1 }}
+                className="text-3xl font-bold text-white font-mono"
+              >
+                {currencySymbol}{currentPrice.toFixed(2)}
+              </motion.div>
+              <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                <span>{isPositive ? "▲" : "▼"}</span>
+                <span className="font-mono">{Math.abs(priceChange).toFixed(2)}%</span>
+                <span className="text-gray-500 text-sm ml-2">
+                  ({isPositive ? "+" : ""}{currencySymbol}{((currentPrice - openPrice)).toFixed(2)})
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -162,7 +225,11 @@ export function MainStockChart() {
           />
         ))}
 
-        {data.length > 0 && (
+        {isLoading ? (
+          <text x={width / 2} y={height / 2} fill="white" textAnchor="middle" fontSize="14">
+            Loading...
+          </text>
+        ) : data.length > 0 && (
           <>
             <motion.path
               d={areaPath}
@@ -215,7 +282,7 @@ export function MainStockChart() {
             dominantBaseline="middle"
             fontFamily="monospace"
           >
-            ₹{price.toFixed(0)}
+            {currencySymbol}{price.toFixed(0)}
           </text>
         ))}
       </svg>
@@ -225,7 +292,7 @@ export function MainStockChart() {
           <button
             key={tf}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              i === 2
+              i === 1
                 ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
                 : "text-gray-500 hover:text-white hover:bg-white/5"
             }`}
@@ -238,15 +305,15 @@ export function MainStockChart() {
       <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
         <div>
           <p className="text-gray-500 text-xs uppercase">Open</p>
-          <p className="text-white font-mono">₹{openPrice.toFixed(2)}</p>
+          <p className="text-white font-mono">{currencySymbol}{openPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs uppercase">High</p>
-          <p className="text-emerald-400 font-mono">₹{(maxPrice).toFixed(2)}</p>
+          <p className="text-emerald-400 font-mono">{currencySymbol}{maxPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs uppercase">Low</p>
-          <p className="text-red-400 font-mono">₹{(minPrice).toFixed(2)}</p>
+          <p className="text-red-400 font-mono">{currencySymbol}{minPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs uppercase">Volume</p>
