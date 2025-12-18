@@ -36,31 +36,13 @@ export default function TradingPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const [allStocks, setAllStocks] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
-  const [totalStocks, setTotalStocks] = useState(0);
-  const [viewMode, setViewMode] = useState<"watchlist" | "browse">("watchlist");
+  const [loadingSymbol, setLoadingSymbol] = useState<string | null>(null);
 
-  const fetchAllStocks = useCallback(async (pageNum: number, search: string = "") => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/stocks/all?page=${pageNum}&limit=50&search=${encodeURIComponent(search)}`);
-      const data = await response.json();
-      if (data.success) {
-        setAllStocks(data.data);
-        setTotalStocks(data.total);
-      }
-    } catch (error) {
-      console.error("Error fetching all stocks:", error);
-    }
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (viewMode === "browse") {
-      fetchAllStocks(page, searchQuery);
-    }
-  }, [viewMode, page, searchQuery, fetchAllStocks]);
+  const popularSymbols = [
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
+    "ITC", "KOTAKBANK", "LT", "AXISBANK", "HINDUNILVR", "MARUTI", "SUNPHARMA",
+    "TATAMOTORS", "WIPRO", "HCLTECH", "BAJFINANCE", "ASIANPAINT", "TITAN"
+  ];
 
   const fetchLiveQuote = useCallback(async (symbol: string): Promise<StockData | null> => {
     try {
@@ -293,26 +275,12 @@ export default function TradingPage() {
                 className="bg-black/40 rounded-xl border border-white/10 overflow-hidden"
               >
                 <div className="p-4 border-b border-white/10 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-4">
-                        <button 
-                          onClick={() => setViewMode("watchlist")}
-                          className={`font-semibold pb-2 border-b-2 transition-all ${viewMode === "watchlist" ? "border-orange-500 text-white" : "border-transparent text-gray-500"}`}
-                        >
-                          Watchlist
-                        </button>
-                        <button 
-                          onClick={() => setViewMode("browse")}
-                          className={`font-semibold pb-2 border-b-2 transition-all ${viewMode === "browse" ? "border-orange-500 text-white" : "border-transparent text-gray-500"}`}
-                        >
-                          Browse All Stocks
-                        </button>
-                      </div>
-                      <span className="text-sm text-gray-500">
-                        {viewMode === "watchlist" ? `${stocks.length} stocks` : `${totalStocks} total stocks`}
-                      </span>
-                    </div>
-
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-semibold">Market Watch</h2>
+                    <span className="text-sm text-gray-500">
+                      {stocks.length} stocks • Live Data
+                    </span>
+                  </div>
                   
                   <div className="relative" ref={searchRef}>
                     <input
