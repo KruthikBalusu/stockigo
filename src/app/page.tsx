@@ -23,26 +23,26 @@ export default function Home() {
           className="text-center mb-10"
         >
           <motion.div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6"
-            animate={{ boxShadow: ["0 0 20px rgba(0,255,136,0.1)", "0 0 40px rgba(0,255,136,0.2)", "0 0 20px rgba(0,255,136,0.1)"] }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 mb-6"
+            animate={{ boxShadow: ["0 0 20px rgba(255,136,0,0.1)", "0 0 40px rgba(255,136,0,0.2)", "0 0 20px rgba(255,136,0,0.1)"] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-emerald-400 text-sm font-medium">Live Market Data</span>
+            <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+            <span className="text-orange-400 text-sm font-medium">NSE • BSE Live</span>
           </motion.div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-4 tracking-tight">
-            <span className="bg-gradient-to-r from-white via-emerald-200 to-cyan-300 bg-clip-text text-transparent">
-              AI Stock
+            <span className="bg-gradient-to-r from-white via-orange-200 to-orange-300 bg-clip-text text-transparent">
+              Indian Stock
             </span>
             <br />
-            <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-              Market
+            <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+              Market AI
             </span>
           </h1>
           
           <p className="text-gray-400 text-lg max-w-md mx-auto">
-            Real-time AI-powered market analysis and predictions
+            Real-time AI-powered analysis for NSE & BSE markets
           </p>
         </motion.div>
 
@@ -57,21 +57,21 @@ export default function Home() {
           className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 w-full max-w-4xl"
         >
           {[
-            { label: "Market Cap", value: "$2.4T", change: "+5.2%" },
-            { label: "24h Volume", value: "$847B", change: "+12.8%" },
-            { label: "Active Traders", value: "2.1M", change: "+3.4%" },
-            { label: "AI Signals", value: "1,247", change: "+89" },
+            { label: "NIFTY 50", value: "₹22,147", change: "+0.82%" },
+            { label: "SENSEX", value: "₹72,985", change: "+0.67%" },
+            { label: "NIFTY Bank", value: "₹47,892", change: "-0.24%" },
+            { label: "Market Cap", value: "₹387L Cr", change: "+1.2%" },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.6 + i * 0.1 }}
-              className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:border-emerald-500/30 transition-all hover:bg-white/10"
+              className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:border-orange-500/30 transition-all hover:bg-white/10"
             >
               <p className="text-gray-500 text-xs uppercase tracking-wider">{stat.label}</p>
               <p className="text-white text-xl font-bold font-mono mt-1">{stat.value}</p>
-              <p className="text-emerald-400 text-sm font-mono">{stat.change}</p>
+              <p className={`text-sm font-mono ${stat.change.startsWith("+") ? "text-emerald-400" : "text-red-400"}`}>{stat.change}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -82,7 +82,7 @@ export default function Home() {
           transition={{ delay: 1 }}
           className="mt-10 flex gap-4"
         >
-          <button className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl font-semibold text-black hover:opacity-90 transition-opacity shadow-lg shadow-emerald-500/25">
+          <button className="px-8 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/25">
             Start Trading
           </button>
           <button className="px-8 py-3 bg-white/5 border border-white/10 rounded-xl font-semibold text-white hover:bg-white/10 transition-all">
