@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { INDIAN_STOCKS, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
 
 interface StockData {
   symbol: string;
@@ -14,11 +13,16 @@ interface StockData {
   high: number;
   low: number;
   volume: number;
-  sector: string;
-  data: TimeSeriesData[];
+  exchange: string;
+  source: string;
 }
 
-const SECTORS = ["All", "Banking", "IT", "Pharma", "FMCG", "Automobile", "Energy", "Metal", "Finance", "Power", "Cement", "Infrastructure", "Consumer", "Telecom", "Chemicals", "Insurance", "Healthcare", "Industrial", "Real Estate", "Retail"];
+interface SearchResult {
+  symbol: string;
+  name: string;
+  exchange: string;
+  type: string;
+}
 
 export default function TradingPage() {
   const [stocks, setStocks] = useState<StockData[]>([]);
@@ -28,133 +32,209 @@ export default function TradingPage() {
   const [quantity, setQuantity] = useState(1);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSector, setSelectedSector] = useState("All");
-  const [visibleCount, setVisibleCount] = useState(20);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const [loadingSymbol, setLoadingSymbol] = useState<string | null>(null);
 
-  const initializeStocks = useCallback(() => {
-    setIsLoading(true);
-    const stockData = INDIAN_STOCKS.map((stock) => {
-      const volatility = (Math.random() - 0.5) * 0.04;
-      const price = stock.basePrice * (1 + volatility);
-      const change = price - stock.basePrice;
-      const changePercent = (change / stock.basePrice) * 100;
+  const popularSymbols = [
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
+    "ITC", "KOTAKBANK", "LT", "AXISBANK", "HINDUNILVR", "MARUTI", "SUNPHARMA",
+    "TATAMOTORS", "WIPRO", "HCLTECH", "BAJFINANCE", "ASIANPAINT", "TITAN"
+  ];
+
+  const fetchLiveQuote = useCallback(async (symbol: string): Promise<StockData | null> => {
+    try {
+      const response = await fetch(`/api/stocks/quote?symbols=${symbol}`);
+      const data = await response.json();
       
-      return {
-        symbol: stock.symbol.replace(".BSE", ""),
-        name: stock.name,
-        price,
-        change,
-        changePercent,
-        high: price * (1 + Math.random() * 0.02),
-        low: price * (1 - Math.random() * 0.02),
-        volume: Math.floor(Math.random() * 10000000) + 100000,
-        sector: stock.sector || "Other",
-        data: generateMiniChartData(price),
-      };
-    });
-    
-    setStocks(stockData);
-    if (stockData.length > 0) setSelectedStock(stockData[0]);
-    setIsLoading(false);
+      if (data.success && data.data?.[0] && !data.data[0].error) {
+        const quote = data.data[0];
+        return {
+          symbol: quote.symbol,
+          name: quote.symbol,
+          price: quote.price,
+          change: quote.change,
+          changePercent: quote.changePercent,
+          high: quote.high,
+          low: quote.low,
+          volume: quote.volume,
+          exchange: "NSE",
+          source: quote.source,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }, []);
 
-  function generateMiniChartData(basePrice: number): TimeSeriesData[] {
-    const data: TimeSeriesData[] = [];
-    let price = basePrice * (0.98 + Math.random() * 0.04);
+  const loadInitialStocks = useCallback(async () => {
+    setIsLoading(true);
     
-    for (let i = 0; i < 20; i++) {
-      const change = (Math.random() - 0.48) * price * 0.01;
-      price = Math.max(price * 0.95, Math.min(price * 1.05, price + change));
+    const batchSize = 5;
+    const loadedStocks: StockData[] = [];
+    
+    for (let i = 0; i < popularSymbols.length; i += batchSize) {
+      const batch = popularSymbols.slice(i, i + batchSize);
+      const symbols = batch.join(",");
       
-      data.push({
-        timestamp: new Date().toISOString(),
-        open: price,
-        high: price * 1.002,
-        low: price * 0.998,
-        close: price,
-        volume: Math.floor(Math.random() * 100000),
-      });
-    }
-    return data;
-  }
-
-  useEffect(() => {
-    initializeStocks();
-  }, [initializeStocks]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStocks(prev => prev.map(stock => {
-        const newPrice = generateLivePrice(stock.price);
-        const priceChange = newPrice - (stock.price - stock.change);
-        return {
-          ...stock,
-          price: newPrice,
-          change: priceChange,
-          changePercent: (priceChange / (stock.price - stock.change)) * 100,
-        };
-      }));
-      
-      if (selectedStock) {
-        setSelectedStock(prev => {
-          if (!prev) return prev;
-          const newPrice = generateLivePrice(prev.price);
-          return { ...prev, price: newPrice };
-        });
+      try {
+        const response = await fetch(`/api/stocks/quote?symbols=${symbols}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          for (const quote of data.data) {
+            if (!quote.error) {
+              loadedStocks.push({
+                symbol: quote.symbol,
+                name: quote.symbol,
+                price: quote.price,
+                change: quote.change,
+                changePercent: quote.changePercent,
+                high: quote.high,
+                low: quote.low,
+                volume: quote.volume,
+                exchange: "NSE",
+                source: quote.source,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching batch:", error);
       }
-    }, 2000);
-    return () => clearInterval(interval);
+      
+      setStocks([...loadedStocks]);
+      if (loadedStocks.length > 0 && !selectedStock) {
+        setSelectedStock(loadedStocks[0]);
+      }
+    }
+    
+    setIsLoading(false);
   }, [selectedStock]);
 
-  const filteredStocks = useMemo(() => {
-    return stocks.filter(stock => {
-      const matchesSearch = searchQuery === "" || 
-        stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stock.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesSector = selectedSector === "All" || stock.sector === selectedSector;
-      return matchesSearch && matchesSector;
-    });
-  }, [stocks, searchQuery, selectedSector]);
+  const searchStocks = useCallback(async (query: string) => {
+    if (query.length < 1) {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      return;
+    }
 
-  const visibleStocks = useMemo(() => {
-    return filteredStocks.slice(0, visibleCount);
-  }, [filteredStocks, visibleCount]);
+    setIsSearching(true);
+    try {
+      const response = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}&market=IN`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setSearchResults(data.data.slice(0, 10));
+        setShowSearchDropdown(true);
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+    }
+    setIsSearching(false);
+  }, []);
+
+  const addStockFromSearch = async (result: SearchResult) => {
+    setShowSearchDropdown(false);
+    setSearchQuery("");
+    setLoadingSymbol(result.symbol);
+
+    const existing = stocks.find(s => s.symbol === result.symbol);
+    if (existing) {
+      setSelectedStock(existing);
+      setLoadingSymbol(null);
+      return;
+    }
+
+    const quote = await fetchLiveQuote(result.symbol);
+    if (quote) {
+      quote.name = result.name || result.symbol;
+      setStocks(prev => [quote, ...prev]);
+      setSelectedStock(quote);
+    }
+    setLoadingSymbol(null);
+  };
+
+  useEffect(() => {
+    loadInitialStocks();
+  }, []);
+
+  useEffect(() => {
+    const debounce = setTimeout(() => {
+      searchStocks(searchQuery);
+    }, 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery, searchStocks]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (stocks.length === 0) return;
+      
+      const symbols = stocks.slice(0, 10).map(s => s.symbol).join(",");
+      try {
+        const response = await fetch(`/api/stocks/quote?symbols=${symbols}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          setStocks(prev => prev.map(stock => {
+            const updated = data.data.find((q: StockData) => q.symbol === stock.symbol);
+            if (updated && !("error" in updated)) {
+              return {
+                ...stock,
+                price: updated.price,
+                change: updated.change,
+                changePercent: updated.changePercent,
+                high: updated.high,
+                low: updated.low,
+                volume: updated.volume,
+              };
+            }
+            return stock;
+          }));
+          
+          if (selectedStock) {
+            const updatedSelected = data.data.find((q: StockData) => q.symbol === selectedStock.symbol);
+            if (updatedSelected && !("error" in updatedSelected)) {
+              setSelectedStock(prev => prev ? {
+                ...prev,
+                price: updatedSelected.price,
+                change: updatedSelected.change,
+                changePercent: updatedSelected.changePercent,
+              } : null);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Update error:", error);
+      }
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [stocks, selectedStock]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handlePlaceOrder = () => {
     setOrderPlaced(true);
     setTimeout(() => setOrderPlaced(false), 3000);
   };
 
-  const loadMore = () => {
-    setVisibleCount(prev => Math.min(prev + 20, filteredStocks.length));
-  };
-
-  const MiniChart = ({ data, isPositive }: { data: TimeSeriesData[], isPositive: boolean }) => {
-    if (data.length === 0) return <div className="w-16 h-6 bg-white/5 rounded" />;
-    
-    const prices = data.map(d => d.close);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const range = max - min || 1;
-    
-    const points = data.map((d, i) => {
-      const x = (i / (data.length - 1)) * 60;
-      const y = 24 - ((d.close - min) / range) * 20;
-      return `${x},${y}`;
-    }).join(" ");
-    
-    return (
-      <svg width="60" height="24" className="overflow-visible">
-        <polyline
-          points={points}
-          fill="none"
-          stroke={isPositive ? "#10b981" : "#ef4444"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
+  const removeStock = (symbol: string) => {
+    setStocks(prev => prev.filter(s => s.symbol !== symbol));
+    if (selectedStock?.symbol === symbol) {
+      setSelectedStock(stocks.find(s => s.symbol !== symbol) || null);
+    }
   };
 
   return (
@@ -183,7 +263,7 @@ export default function TradingPage() {
           >
             <h1 className="text-3xl font-bold mb-2">Live Trading</h1>
             <p className="text-gray-400">
-              {filteredStocks.length} stocks available • Real-time prices from NSE/BSE
+              Search any NSE/BSE stock • Real-time prices from Yahoo Finance
             </p>
           </motion.div>
 
@@ -198,111 +278,159 @@ export default function TradingPage() {
                   <div className="flex items-center justify-between">
                     <h2 className="font-semibold">Market Watch</h2>
                     <span className="text-sm text-gray-500">
-                      Showing {visibleStocks.length} of {filteredStocks.length}
+                      {stocks.length} stocks • Live Data
                     </span>
                   </div>
                   
-                  <div className="relative">
+                  <div className="relative" ref={searchRef}>
                     <input
                       type="text"
-                      placeholder="Search by symbol or company name..."
+                      placeholder="Search any stock (e.g., TATASTEEL, WIPRO, HDFC)..."
                       value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setVisibleCount(20);
-                      }}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => searchResults.length > 0 && setShowSearchDropdown(true)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
                     />
                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {SECTORS.map(sector => (
-                      <button
-                        key={sector}
-                        onClick={() => {
-                          setSelectedSector(sector);
-                          setVisibleCount(20);
-                        }}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                          selectedSector === sector
-                            ? "bg-orange-500 text-white"
-                            : "bg-white/5 text-gray-400 hover:bg-white/10"
-                        }`}
-                      >
-                        {sector}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                {isLoading ? (
-                  <div className="p-8 text-center text-gray-500">Loading market data...</div>
-                ) : filteredStocks.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">No stocks found matching your search.</div>
-                ) : (
-                  <>
-                    <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
-                      <AnimatePresence>
-                        {visibleStocks.map((stock, i) => (
-                          <motion.div
-                            key={stock.symbol}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ delay: i * 0.02 }}
-                            onClick={() => setSelectedStock(stock)}
-                            className={`p-3 cursor-pointer transition-all hover:bg-white/5 ${
-                              selectedStock?.symbol === stock.symbol ? "bg-orange-500/10 border-l-2 border-orange-500" : ""
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-400/20 to-orange-600/20 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-orange-400 font-bold text-[10px]">{stock.symbol.slice(0, 3)}</span>
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-semibold text-white text-sm truncate">{stock.symbol}</p>
-                                  <p className="text-gray-500 text-xs truncate">{stock.name}</p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 ml-2">
-                                <span className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-gray-400 hidden sm:block">
-                                  {stock.sector}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center gap-4 ml-2">
-                                <div className="hidden sm:block">
-                                  <MiniChart data={stock.data} isPositive={stock.change >= 0} />
-                                </div>
-                                <div className="text-right min-w-[90px]">
-                                  <p className="font-mono font-semibold text-white text-sm">₹{stock.price.toFixed(2)}</p>
-                                  <p className={`font-mono text-xs ${stock.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                                    {stock.change >= 0 ? "+" : ""}{stock.changePercent.toFixed(2)}%
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                    
-                    {visibleCount < filteredStocks.length && (
-                      <div className="p-4 border-t border-white/10">
-                        <button
-                          onClick={loadMore}
-                          className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-gray-400 transition-all"
-                        >
-                          Load More ({filteredStocks.length - visibleCount} remaining)
-                        </button>
+                    {isSearching && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                       </div>
                     )}
-                  </>
+
+                    <AnimatePresence>
+                      {showSearchDropdown && searchResults.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a24] border border-white/10 rounded-lg shadow-2xl overflow-hidden z-50"
+                        >
+                          {searchResults.map((result) => (
+                            <button
+                              key={result.symbol}
+                              onClick={() => addStockFromSearch(result)}
+                              disabled={loadingSymbol === result.symbol}
+                              className="w-full p-3 flex items-center justify-between hover:bg-white/5 transition-all text-left disabled:opacity-50"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400/20 to-orange-600/20 flex items-center justify-center">
+                                  <span className="text-orange-400 font-bold text-[10px]">
+                                    {result.symbol.slice(0, 3)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-white text-sm">{result.symbol}</p>
+                                  <p className="text-gray-500 text-xs truncate max-w-[200px]">{result.name}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-gray-400">
+                                  {result.exchange}
+                                </span>
+                                {loadingSymbol === result.symbol ? (
+                                  <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <p className="text-xs text-gray-500">
+                    Type any stock symbol or company name to search and add to watchlist
+                  </p>
+                </div>
+                
+                {isLoading && stocks.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-gray-500">Loading live market data...</p>
+                  </div>
+                ) : stocks.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <p>Search for stocks to add them to your watchlist</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+                    <AnimatePresence>
+                      {stocks.map((stock, i) => (
+                        <motion.div
+                          key={stock.symbol}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0, x: -50 }}
+                          transition={{ delay: i * 0.02 }}
+                          onClick={() => setSelectedStock(stock)}
+                          className={`p-3 cursor-pointer transition-all hover:bg-white/5 group ${
+                            selectedStock?.symbol === stock.symbol ? "bg-orange-500/10 border-l-2 border-orange-500" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-400/20 to-orange-600/20 flex items-center justify-center flex-shrink-0">
+                                <span className="text-orange-400 font-bold text-[10px]">{stock.symbol.slice(0, 3)}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-white text-sm truncate">{stock.symbol}</p>
+                                <p className="text-gray-500 text-xs truncate">{stock.name}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 ml-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] ${
+                                stock.source === "live" ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-gray-400"
+                              }`}>
+                                {stock.source === "live" ? "LIVE" : stock.exchange}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-4 ml-2">
+                              <div className="text-right min-w-[100px]">
+                                <motion.p
+                                  key={stock.price}
+                                  initial={{ scale: 1.05 }}
+                                  animate={{ scale: 1 }}
+                                  className="font-mono font-semibold text-white text-sm"
+                                >
+                                  ₹{stock.price.toFixed(2)}
+                                </motion.p>
+                                <p className={`font-mono text-xs ${stock.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                  {stock.change >= 0 ? "+" : ""}{stock.changePercent.toFixed(2)}%
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeStock(stock.symbol);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                              >
+                                <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {isLoading && stocks.length > 0 && (
+                  <div className="p-3 border-t border-white/10 flex items-center justify-center gap-2 text-gray-500 text-sm">
+                    <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                    Loading more stocks...
+                  </div>
                 )}
               </motion.div>
             </div>
@@ -322,6 +450,12 @@ export default function TradingPage() {
                       <h3 className="font-bold text-xl truncate">{selectedStock.symbol}</h3>
                       <p className="text-gray-500 text-sm truncate">{selectedStock.name}</p>
                     </div>
+                    {selectedStock.source === "live" && (
+                      <span className="px-2 py-1 bg-emerald-500/20 rounded text-xs text-emerald-400 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                        LIVE
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-center mb-6">
@@ -334,7 +468,7 @@ export default function TradingPage() {
                       ₹{selectedStock.price.toFixed(2)}
                     </motion.p>
                     <p className={`font-mono ${selectedStock.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      {selectedStock.change >= 0 ? "▲" : "▼"} {Math.abs(selectedStock.changePercent).toFixed(2)}%
+                      {selectedStock.change >= 0 ? "▲" : "▼"} ₹{Math.abs(selectedStock.change).toFixed(2)} ({Math.abs(selectedStock.changePercent).toFixed(2)}%)
                     </p>
                   </div>
 
@@ -348,12 +482,18 @@ export default function TradingPage() {
                       <p className="text-red-400 font-mono text-sm">₹{selectedStock.low.toFixed(2)}</p>
                     </div>
                     <div className="bg-white/5 rounded-lg p-3">
-                      <p className="text-gray-500 text-xs">Sector</p>
-                      <p className="text-white font-medium text-sm">{selectedStock.sector}</p>
+                      <p className="text-gray-500 text-xs">Exchange</p>
+                      <p className="text-white font-medium text-sm">{selectedStock.exchange}</p>
                     </div>
                     <div className="bg-white/5 rounded-lg p-3">
                       <p className="text-gray-500 text-xs">Volume</p>
-                      <p className="text-white font-mono text-sm">{(selectedStock.volume / 1000000).toFixed(2)}M</p>
+                      <p className="text-white font-mono text-sm">
+                        {selectedStock.volume > 1000000 
+                          ? `${(selectedStock.volume / 1000000).toFixed(2)}M`
+                          : selectedStock.volume > 1000
+                          ? `${(selectedStock.volume / 1000).toFixed(1)}K`
+                          : selectedStock.volume}
+                      </p>
                     </div>
                   </div>
 
