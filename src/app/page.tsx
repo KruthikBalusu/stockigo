@@ -56,12 +56,7 @@ export default function Home() {
           transition={{ duration: 0.8, delay: 0.5 }}
           className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 w-full max-w-4xl"
         >
-          {[
-            { label: "NIFTY 50", value: "₹22,420", change: "+0.82%" },
-            { label: "SENSEX", value: "₹73,850", change: "+0.67%" },
-            { label: "NIFTY Bank", value: "₹47,320", change: "-0.24%" },
-            { label: "Market Cap", value: "₹385T", change: "+1.2%" },
-          ].map((stat, i) => (
+          {stats.map((stat, i) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -71,7 +66,7 @@ export default function Home() {
             >
               <p className="text-gray-500 text-xs uppercase tracking-wider">{stat.label}</p>
               <p className="text-white text-xl font-bold font-mono mt-1">{stat.value}</p>
-              <p className={`text-sm font-mono ${stat.change.startsWith("+") ? "text-emerald-400" : "text-red-400"}`}>{stat.change}</p>
+              <p className={`text-sm font-mono ${stat.up ? "text-emerald-400" : "text-red-400"}`}>{stat.change}</p>
             </motion.div>
           ))}
         </motion.div>
