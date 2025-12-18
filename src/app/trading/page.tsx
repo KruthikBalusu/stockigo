@@ -36,13 +36,31 @@ export default function TradingPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const [loadingSymbol, setLoadingSymbol] = useState<string | null>(null);
+  const [allStocks, setAllStocks] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalStocks, setTotalStocks] = useState(0);
+  const [viewMode, setViewMode] = useState<"watchlist" | "browse">("watchlist");
 
-  const popularSymbols = [
-    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
-    "ITC", "KOTAKBANK", "LT", "AXISBANK", "HINDUNILVR", "MARUTI", "SUNPHARMA",
-    "TATAMOTORS", "WIPRO", "HCLTECH", "BAJFINANCE", "ASIANPAINT", "TITAN"
-  ];
+  const fetchAllStocks = useCallback(async (pageNum: number, search: string = "") => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/stocks/all?page=${pageNum}&limit=50&search=${encodeURIComponent(search)}`);
+      const data = await response.json();
+      if (data.success) {
+        setAllStocks(data.data);
+        setTotalStocks(data.total);
+      }
+    } catch (error) {
+      console.error("Error fetching all stocks:", error);
+    }
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (viewMode === "browse") {
+      fetchAllStocks(page, searchQuery);
+    }
+  }, [viewMode, page, searchQuery, fetchAllStocks]);
 
   const fetchLiveQuote = useCallback(async (symbol: string): Promise<StockData | null> => {
     try {
@@ -275,12 +293,26 @@ export default function TradingPage() {
                 className="bg-black/40 rounded-xl border border-white/10 overflow-hidden"
               >
                 <div className="p-4 border-b border-white/10 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-semibold">Market Watch</h2>
-                    <span className="text-sm text-gray-500">
-                      {stocks.length} stocks • Live Data
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-4">
+                        <button 
+                          onClick={() => setViewMode("watchlist")}
+                          className={`font-semibold pb-2 border-b-2 transition-all ${viewMode === "watchlist" ? "border-orange-500 text-white" : "border-transparent text-gray-500"}`}
+                        >
+                          Watchlist
+                        </button>
+                        <button 
+                          onClick={() => setViewMode("browse")}
+                          className={`font-semibold pb-2 border-b-2 transition-all ${viewMode === "browse" ? "border-orange-500 text-white" : "border-transparent text-gray-500"}`}
+                        >
+                          Browse All Stocks
+                        </button>
+                      </div>
+                      <span className="text-sm text-gray-500">
+                        {viewMode === "watchlist" ? `${stocks.length} stocks` : `${totalStocks} total stocks`}
+                      </span>
+                    </div>
+
                   
                   <div className="relative" ref={searchRef}>
                     <input
@@ -350,7 +382,55 @@ export default function TradingPage() {
                   </p>
                 </div>
                 
-                {isLoading && stocks.length === 0 ? (
+                  {viewMode === "browse" ? (
+                    <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+                      {allStocks.map((stock, i) => (
+                        <div
+                          key={`${stock.symbol}-${i}`}
+                          className="p-3 flex items-center justify-between hover:bg-white/5 transition-all group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center">
+                              <span className="text-gray-400 font-bold text-[10px]">{stock.symbol.slice(0, 3)}</span>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-white text-sm">{stock.symbol}</p>
+                              <p className="text-gray-500 text-xs truncate max-w-[200px]">{stock.name}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-gray-500 px-2 py-1 bg-white/5 rounded">{stock.exchange}</span>
+                            <button
+                              onClick={() => addStockFromSearch(stock)}
+                              className="px-3 py-1 bg-orange-500/10 text-orange-400 rounded-lg text-xs hover:bg-orange-500/20 transition-all"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {allStocks.length > 0 && (
+                        <div className="p-4 flex justify-between items-center bg-black/20">
+                          <button 
+                            disabled={page === 1}
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            className="px-4 py-2 bg-white/5 rounded-lg disabled:opacity-30"
+                          >
+                            Previous
+                          </button>
+                          <span className="text-sm text-gray-500">Page {page} of {Math.ceil(totalStocks / 50)}</span>
+                          <button 
+                            disabled={page * 50 >= totalStocks}
+                            onClick={() => setPage(p => p + 1)}
+                            className="px-4 py-2 bg-white/5 rounded-lg disabled:opacity-30"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : isLoading && stocks.length === 0 ? (
+
                   <div className="p-8 text-center">
                     <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-gray-500">Loading live market data...</p>
