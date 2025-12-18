@@ -281,20 +281,21 @@ export function MainStockChart() {
         ))}
       </svg>
 
-      <div className="flex justify-between mt-4 px-2">
-        {["1M", "5M", "15M", "1H", "1D", "1W"].map((tf, i) => (
-          <button
-            key={tf}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              i === 1
-                ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
-                : "text-gray-500 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            {tf}
-          </button>
-        ))}
-      </div>
+<div className="flex justify-between mt-4 px-2">
+          {TIMEFRAMES.map((tf, i) => (
+            <button
+              key={tf.label}
+              onClick={() => setSelectedTimeframe(i)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                i === selectedTimeframe
+                  ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                  : "text-gray-500 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {tf.label}
+            </button>
+          ))}
+        </div>
 
       <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
         <div>
