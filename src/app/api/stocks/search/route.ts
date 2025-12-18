@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY || "demo";
 
-async function searchYahoo(query: string, market: string) {
-  const searchQuery = market === "IN" ? `${query}.NS ${query}.BO` : query;
-  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchQuery)}&quotesCount=30&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query`;
+async function searchYahoo(query: string) {
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=30&newsCount=0&enableFuzzyQuery=true`;
 
   const response = await fetch(url, {
     headers: {
@@ -18,6 +17,37 @@ async function searchYahoo(query: string, market: string) {
   }
 
   return response.json();
+}
+
+async function verifySymbol(symbol: string) {
+  const nseSymbol = `${symbol}.NS`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${nseSymbol}?interval=1d&range=1d`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      next: { revalidate: 60 },
+    });
+
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+    
+    if (meta?.regularMarketPrice) {
+      return {
+        symbol: symbol.toUpperCase(),
+        name: meta.shortName || meta.longName || symbol,
+        exchange: "NSE",
+        type: "Stock",
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function searchAlphaVantage(query: string) {
