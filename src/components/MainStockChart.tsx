@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { INDIAN_STOCKS, generateRealisticStockData, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
+import { generateLivePrice, TimeSeriesData, searchStocks, StockSearchResult } from "@/lib/stockApi";
 
 const TIMEFRAMES = [
   { label: "1M", interval: "1min", points: 60 },
@@ -13,20 +13,44 @@ const TIMEFRAMES = [
   { label: "1W", interval: "weekly", points: 52 },
 ];
 
+interface Stock {
+  symbol: string;
+  name: string;
+}
+
 export function MainStockChart() {
   const [data, setData] = useState<TimeSeriesData[]>([]);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [openPrice, setOpenPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
-  const [selectedStockIndex, setSelectedStockIndex] = useState(0);
+  const [selectedStock, setSelectedStock] = useState<Stock>({ symbol: "RELIANCE", name: "Reliance Industries" });
+  const [stocks, setStocks] = useState<Stock[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
-  const lastFetchRef = useRef<number>(0);
 
-  const stock = INDIAN_STOCKS[selectedStockIndex];
   const timeframe = TIMEFRAMES[selectedTimeframe];
+
+  useEffect(() => {
+    async function loadInitialStocks() {
+      const symbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN"];
+      try {
+        const response = await fetch(`/api/stocks/quote?symbols=${symbols.join(",")}`);
+        const data = await response.json();
+        if (data.quotes && data.quotes.length > 0) {
+          setStocks(data.quotes.map((q: { symbol: string; name: string }) => ({ symbol: q.symbol, name: q.name })));
+          setSelectedStock({ symbol: data.quotes[0].symbol, name: data.quotes[0].name });
+        }
+      } catch {
+        setStocks(symbols.map(s => ({ symbol: s, name: s })));
+      }
+    }
+    loadInitialStocks();
+  }, []);
 
   const fetchStockData = useCallback(async (symbol: string, interval: string, points: number) => {
     setIsLoading(true);
@@ -37,7 +61,6 @@ export function MainStockChart() {
       const result = await response.json();
 
       if (result.success && result.data?.length > 0) {
-        lastFetchRef.current = Date.now();
         const fetchedData = result.data.slice(0, points);
         setData(fetchedData);
         const firstPrice = fetchedData[0]?.open || 0;
@@ -45,30 +68,24 @@ export function MainStockChart() {
         setOpenPrice(firstPrice);
         setCurrentPrice(lastPrice);
         setPriceChange(((lastPrice - firstPrice) / firstPrice) * 100);
+        if (result.name) {
+          setSelectedStock(prev => ({ ...prev, name: result.name }));
+        }
       } else {
-        setApiError(result.error || "Demo Mode");
-        const fallbackData = generateRealisticStockData(stock.basePrice, points);
-        setData(fallbackData);
-        const lastPrice = fallbackData[fallbackData.length - 1]?.close || stock.basePrice;
-        setOpenPrice(stock.basePrice);
-        setCurrentPrice(lastPrice);
-        setPriceChange(((lastPrice - stock.basePrice) / stock.basePrice) * 100);
+        setApiError("Could not load data");
       }
     } catch {
-      setApiError("Demo Mode");
-      const fallbackData = generateRealisticStockData(stock.basePrice, points);
-      setData(fallbackData);
-      setOpenPrice(stock.basePrice);
-      setCurrentPrice(fallbackData[fallbackData.length - 1]?.close || stock.basePrice);
+      setApiError("Connection error");
     } finally {
       setIsLoading(false);
     }
-  }, [stock.basePrice]);
+  }, []);
 
   useEffect(() => {
-    const s = INDIAN_STOCKS[selectedStockIndex];
-    fetchStockData(s.symbol, timeframe.interval, timeframe.points);
-  }, [selectedStockIndex, selectedTimeframe, fetchStockData, timeframe.interval, timeframe.points]);
+    if (selectedStock.symbol) {
+      fetchStockData(selectedStock.symbol, timeframe.interval, timeframe.points);
+    }
+  }, [selectedStock.symbol, selectedTimeframe, fetchStockData, timeframe.interval, timeframe.points]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -95,6 +112,18 @@ export function MainStockChart() {
     }, 1000);
     return () => clearInterval(interval);
   }, [openPrice]);
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchQuery.length >= 2) {
+        const results = await searchStocks(searchQuery);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const width = 800;
   const height = 300;
@@ -129,37 +158,78 @@ export function MainStockChart() {
       className="relative bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl"
     >
       <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-2 flex-wrap">
-          {INDIAN_STOCKS.slice(0, 6).map((s, i) => (
+        <div className="flex gap-2 flex-wrap items-center">
+          {stocks.slice(0, 6).map((s) => (
             <button
               key={s.symbol}
-              onClick={() => setSelectedStockIndex(i)}
+              onClick={() => setSelectedStock(s)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                i === selectedStockIndex
+                s.symbol === selectedStock.symbol
                   ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
                   : "text-gray-500 hover:text-white hover:bg-white/5 border border-transparent"
               }`}
             >
-              {s.symbol.replace(".BSE", "")}
+              {s.symbol}
             </button>
           ))}
+          <button
+            onClick={() => setShowSearch(!showSearch)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-white/5 border border-dashed border-gray-600"
+          >
+            + Search
+          </button>
         </div>
         {apiError && (
           <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded">
-            Demo Mode
+            {apiError}
           </span>
         )}
       </div>
+
+      {showSearch && (
+        <div className="mb-4 relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search any stock (e.g., TATASTEEL, WIPRO)..."
+            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50"
+          />
+          {searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-black/90 border border-white/10 rounded-lg max-h-48 overflow-y-auto z-10">
+              {searchResults.map((result) => (
+                <button
+                  key={result.symbol}
+                  onClick={() => {
+                    setSelectedStock({ symbol: result.symbol, name: result.name });
+                    setStocks(prev => {
+                      if (prev.find(s => s.symbol === result.symbol)) return prev;
+                      return [...prev.slice(0, 5), { symbol: result.symbol, name: result.name }];
+                    });
+                    setSearchQuery("");
+                    setSearchResults([]);
+                    setShowSearch(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-white/10 flex justify-between items-center"
+                >
+                  <span className="text-white font-medium">{result.symbol}</span>
+                  <span className="text-gray-400 text-sm truncate ml-2">{result.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">{stock.symbol.replace(".BSE", "").slice(0, 3)}</span>
+              <span className="text-white font-bold text-xs">{selectedStock.symbol.slice(0, 3)}</span>
             </div>
             <div>
-              <h2 className="text-white font-bold text-xl tracking-tight">{stock.name}</h2>
-              <p className="text-gray-500 text-sm">{stock.symbol} • NSE/BSE</p>
+              <h2 className="text-white font-bold text-xl tracking-tight">{selectedStock.name}</h2>
+              <p className="text-gray-500 text-sm">{selectedStock.symbol} • NSE</p>
             </div>
           </div>
         </div>
@@ -281,21 +351,21 @@ export function MainStockChart() {
         ))}
       </svg>
 
-<div className="flex justify-between mt-4 px-2">
-          {TIMEFRAMES.map((tf, i) => (
-            <button
-              key={tf.label}
-              onClick={() => setSelectedTimeframe(i)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                i === selectedTimeframe
-                  ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
-                  : "text-gray-500 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              {tf.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex justify-between mt-4 px-2">
+        {TIMEFRAMES.map((tf, i) => (
+          <button
+            key={tf.label}
+            onClick={() => setSelectedTimeframe(i)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              i === selectedTimeframe
+                ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                : "text-gray-500 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            {tf.label}
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
         <div>
