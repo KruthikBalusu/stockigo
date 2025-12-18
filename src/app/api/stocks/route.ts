@@ -71,16 +71,31 @@ export async function GET(request: Request) {
     symbol = INDIAN_STOCK_MAP[symbol];
   }
 
-  try {
-    const response = await fetch(
-      `${BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=${interval}&apikey=${API_KEY}`,
-      { next: { revalidate: 60 } }
-    );
+  const isDaily = interval === "daily";
+  const isWeekly = interval === "weekly";
+  
+  let apiFunction = "TIME_SERIES_INTRADAY";
+  let timeSeriesKey = `Time Series (${interval})`;
+  
+  if (isDaily) {
+    apiFunction = "TIME_SERIES_DAILY";
+    timeSeriesKey = "Time Series (Daily)";
+  } else if (isWeekly) {
+    apiFunction = "TIME_SERIES_WEEKLY";
+    timeSeriesKey = "Weekly Time Series";
+  }
+  
+  const apiUrl = isDaily || isWeekly 
+    ? `${BASE_URL}?function=${apiFunction}&symbol=${symbol}&apikey=${API_KEY}`
+    : `${BASE_URL}?function=${apiFunction}&symbol=${symbol}&interval=${interval}&apikey=${API_KEY}`;
 
+  try {
+    const response = await fetch(apiUrl, { next: { revalidate: 60 } });
     const data = await response.json();
 
-    if (data["Time Series (5min)"]) {
-      const timeSeries = data["Time Series (5min)"];
+    const timeSeries = data[timeSeriesKey] || data["Time Series (5min)"] || data["Time Series (Daily)"] || data["Weekly Time Series"];
+    
+    if (timeSeries) {
       const formattedData = Object.entries(timeSeries)
         .slice(0, 60)
         .map(([timestamp, values]: [string, unknown]) => {
@@ -100,32 +115,7 @@ export async function GET(request: Request) {
         success: true, 
         data: formattedData,
         symbol,
-        market: "NSE/BSE",
-        source: "live"
-      });
-    }
-
-    if (data["Time Series (Daily)"]) {
-      const timeSeries = data["Time Series (Daily)"];
-      const formattedData = Object.entries(timeSeries)
-        .slice(0, 60)
-        .map(([timestamp, values]: [string, unknown]) => {
-          const v = values as Record<string, string>;
-          return {
-            timestamp,
-            open: parseFloat(v["1. open"]),
-            high: parseFloat(v["2. high"]),
-            low: parseFloat(v["3. low"]),
-            close: parseFloat(v["4. close"]),
-            volume: parseInt(v["5. volume"]),
-          };
-        })
-        .reverse();
-
-      return NextResponse.json({ 
-        success: true, 
-        data: formattedData,
-        symbol,
+        interval,
         market: "NSE/BSE",
         source: "live"
       });
