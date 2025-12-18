@@ -28,30 +28,26 @@ export function MainStockChart() {
   const stock = INDIAN_STOCKS[selectedStockIndex];
   const timeframe = TIMEFRAMES[selectedTimeframe];
 
-  const fetchStockData = useCallback(async (symbol: string) => {
-    const now = Date.now();
-    if (now - lastFetchRef.current < 60000 && data.length > 0) {
-      return;
-    }
-
+  const fetchStockData = useCallback(async (symbol: string, interval: string, points: number) => {
     setIsLoading(true);
     setApiError(null);
 
     try {
-      const response = await fetch(`/api/stocks?symbol=${symbol}&interval=5min`);
+      const response = await fetch(`/api/stocks?symbol=${symbol}&interval=${interval}`);
       const result = await response.json();
 
       if (result.success && result.data?.length > 0) {
-        lastFetchRef.current = now;
-        setData(result.data);
-        const firstPrice = result.data[0]?.open || 0;
-        const lastPrice = result.data[result.data.length - 1]?.close || 0;
+        lastFetchRef.current = Date.now();
+        const fetchedData = result.data.slice(0, points);
+        setData(fetchedData);
+        const firstPrice = fetchedData[0]?.open || 0;
+        const lastPrice = fetchedData[fetchedData.length - 1]?.close || 0;
         setOpenPrice(firstPrice);
         setCurrentPrice(lastPrice);
         setPriceChange(((lastPrice - firstPrice) / firstPrice) * 100);
       } else {
-        setApiError(result.error || "Failed to fetch");
-        const fallbackData = generateRealisticStockData(stock.basePrice, 60);
+        setApiError(result.error || "Demo Mode");
+        const fallbackData = generateRealisticStockData(stock.basePrice, points);
         setData(fallbackData);
         const lastPrice = fallbackData[fallbackData.length - 1]?.close || stock.basePrice;
         setOpenPrice(stock.basePrice);
@@ -59,20 +55,20 @@ export function MainStockChart() {
         setPriceChange(((lastPrice - stock.basePrice) / stock.basePrice) * 100);
       }
     } catch {
-      setApiError("Network error");
-      const fallbackData = generateRealisticStockData(stock.basePrice, 60);
+      setApiError("Demo Mode");
+      const fallbackData = generateRealisticStockData(stock.basePrice, points);
       setData(fallbackData);
       setOpenPrice(stock.basePrice);
       setCurrentPrice(fallbackData[fallbackData.length - 1]?.close || stock.basePrice);
     } finally {
       setIsLoading(false);
     }
-  }, [data.length, stock.basePrice]);
+  }, [stock.basePrice]);
 
   useEffect(() => {
     const s = INDIAN_STOCKS[selectedStockIndex];
-    fetchStockData(s.symbol);
-  }, [selectedStockIndex, fetchStockData]);
+    fetchStockData(s.symbol, timeframe.interval, timeframe.points);
+  }, [selectedStockIndex, selectedTimeframe, fetchStockData, timeframe.interval, timeframe.points]);
 
   useEffect(() => {
     const interval = setInterval(() => {
