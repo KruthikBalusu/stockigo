@@ -2,82 +2,78 @@
 
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
+import { INDIAN_STOCKS, generateRealisticStockData, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
 
-interface DataPoint {
-  time: number;
-  price: number;
-  volume: number;
-}
+const selectedStock = INDIAN_STOCKS[0];
 
 export function MainStockChart() {
-  const [data, setData] = useState<DataPoint[]>([]);
-  const [currentPrice, setCurrentPrice] = useState(245.67);
-  const [priceChange, setPriceChange] = useState(3.42);
+  const [data, setData] = useState<TimeSeriesData[]>([]);
+  const [currentPrice, setCurrentPrice] = useState(selectedStock.basePrice);
+  const [openPrice] = useState(selectedStock.basePrice);
+  const [priceChange, setPriceChange] = useState(0);
+  const [selectedStockIndex, setSelectedStockIndex] = useState(0);
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    const initial: DataPoint[] = [];
-    let price = 230;
-    for (let i = 0; i < 60; i++) {
-      price += (Math.random() - 0.48) * 3;
-      price = Math.max(200, Math.min(280, price));
-      initial.push({
-        time: Date.now() - (60 - i) * 1000,
-        price,
-        volume: Math.random() * 100 + 20,
-      });
-    }
-    setData(initial);
-    setCurrentPrice(price);
-  }, []);
+    const stock = INDIAN_STOCKS[selectedStockIndex];
+    const initialData = generateRealisticStockData(stock.basePrice, 60);
+    setData(initialData);
+    const lastPrice = initialData[initialData.length - 1]?.close || stock.basePrice;
+    setCurrentPrice(lastPrice);
+    setPriceChange(((lastPrice - stock.basePrice) / stock.basePrice) * 100);
+  }, [selectedStockIndex]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setData(prev => {
-        const lastPrice = prev.length > 0 ? prev[prev.length - 1].price : 245;
-        const change = (Math.random() - 0.48) * 2;
-        const newPrice = Math.max(200, Math.min(280, lastPrice + change));
+        if (prev.length === 0) return prev;
+        const lastPrice = prev[prev.length - 1].close;
+        const newPrice = generateLivePrice(lastPrice);
         
         setCurrentPrice(newPrice);
-        setPriceChange(prev => {
-          const newChange = prev + change * 0.1;
-          return Math.max(-10, Math.min(10, newChange));
-        });
+        setPriceChange(((newPrice - openPrice) / openPrice) * 100);
 
-        const newData = [
-          ...prev.slice(-59),
-          {
-            time: Date.now(),
-            price: newPrice,
-            volume: Math.random() * 100 + 20,
-          },
-        ];
-        return newData;
+        const now = new Date();
+        const newPoint: TimeSeriesData = {
+          timestamp: now.toISOString(),
+          open: lastPrice,
+          high: Math.max(lastPrice, newPrice),
+          low: Math.min(lastPrice, newPrice),
+          close: newPrice,
+          volume: Math.floor(Math.random() * 1000000) + 100000,
+        };
+
+        return [...prev.slice(-59), newPoint];
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [openPrice]);
 
   const width = 800;
   const height = 300;
   const padding = 40;
 
-  const prices = data.map(d => d.price);
-  const minPrice = Math.min(...prices, 200);
-  const maxPrice = Math.max(...prices, 280);
+  const prices = data.map(d => d.close);
+  const minPrice = prices.length > 0 ? Math.min(...prices) * 0.998 : 0;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) * 1.002 : 100;
 
-  const getX = (index: number) => padding + (index / (data.length - 1)) * (width - padding * 2);
-  const getY = (price: number) =>
-    height - padding - ((price - minPrice) / (maxPrice - minPrice)) * (height - padding * 2);
+  const getX = (index: number) => padding + (index / Math.max(data.length - 1, 1)) * (width - padding * 2);
+  const getY = (price: number) => {
+    if (maxPrice === minPrice) return height / 2;
+    return height - padding - ((price - minPrice) / (maxPrice - minPrice)) * (height - padding * 2);
+  };
 
   const linePath = data
-    .map((d, i) => `${i === 0 ? "M" : "L"} ${getX(i)} ${getY(d.price)}`)
+    .map((d, i) => `${i === 0 ? "M" : "L"} ${getX(i)} ${getY(d.close)}`)
     .join(" ");
 
-  const areaPath = `${linePath} L ${getX(data.length - 1)} ${height - padding} L ${padding} ${height - padding} Z`;
+  const areaPath = data.length > 0
+    ? `${linePath} L ${getX(data.length - 1)} ${height - padding} L ${padding} ${height - padding} Z`
+    : "";
 
   const isPositive = priceChange >= 0;
   const mainColor = isPositive ? "#00ff88" : "#ff4444";
+  const stock = INDIAN_STOCKS[selectedStockIndex];
 
   return (
     <motion.div
@@ -86,30 +82,51 @@ export function MainStockChart() {
       transition={{ duration: 0.8, delay: 0.3 }}
       className="relative bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl"
     >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex gap-2 flex-wrap">
+          {INDIAN_STOCKS.slice(0, 6).map((s, i) => (
+            <button
+              key={s.symbol}
+              onClick={() => setSelectedStockIndex(i)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                i === selectedStockIndex
+                  ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                  : "text-gray-500 hover:text-white hover:bg-white/5 border border-transparent"
+              }`}
+            >
+              {s.symbol.replace(".BSE", "")}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center">
-              <span className="text-black font-bold text-sm">AI</span>
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+              <span className="text-white font-bold text-xs">{stock.symbol.replace(".BSE", "").slice(0, 3)}</span>
             </div>
             <div>
-              <h2 className="text-white font-bold text-xl tracking-tight">AI Market Index</h2>
-              <p className="text-gray-500 text-sm">AIMDX</p>
+              <h2 className="text-white font-bold text-xl tracking-tight">{stock.name}</h2>
+              <p className="text-gray-500 text-sm">{stock.symbol} • NSE/BSE</p>
             </div>
           </div>
         </div>
         <div className="text-right">
           <motion.div
             key={currentPrice}
-            initial={{ scale: 1.1 }}
+            initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
             className="text-3xl font-bold text-white font-mono"
           >
-            ${currentPrice.toFixed(2)}
+            ₹{currentPrice.toFixed(2)}
           </motion.div>
           <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
             <span>{isPositive ? "▲" : "▼"}</span>
             <span className="font-mono">{Math.abs(priceChange).toFixed(2)}%</span>
+            <span className="text-gray-500 text-sm ml-2">
+              ({isPositive ? "+" : ""}₹{((currentPrice - openPrice)).toFixed(2)})
+            </span>
           </div>
         </div>
       </div>
@@ -145,47 +162,49 @@ export function MainStockChart() {
           />
         ))}
 
-        <motion.path
-          d={areaPath}
-          fill="url(#areaGradient)"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1 }}
-        />
-
-        <motion.path
-          d={linePath}
-          fill="none"
-          stroke="url(#lineGradient)"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          filter="url(#glow)"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 2, ease: "easeOut" }}
-        />
-
         {data.length > 0 && (
-          <motion.circle
-            cx={getX(data.length - 1)}
-            cy={getY(data[data.length - 1].price)}
-            r="6"
-            fill={mainColor}
-            filter="url(#glow)"
-            animate={{
-              r: [6, 10, 6],
-              opacity: [1, 0.6, 1],
-            }}
-            transition={{
-              duration: 1.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
+          <>
+            <motion.path
+              d={areaPath}
+              fill="url(#areaGradient)"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1 }}
+            />
+
+            <motion.path
+              d={linePath}
+              fill="none"
+              stroke="url(#lineGradient)"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              filter="url(#glow)"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 2, ease: "easeOut" }}
+            />
+
+            <motion.circle
+              cx={getX(data.length - 1)}
+              cy={getY(data[data.length - 1].close)}
+              r="6"
+              fill={mainColor}
+              filter="url(#glow)"
+              animate={{
+                r: [6, 10, 6],
+                opacity: [1, 0.6, 1],
+              }}
+              transition={{
+                duration: 1.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            />
+          </>
         )}
 
-        {[minPrice, (minPrice + maxPrice) / 2, maxPrice].map((price, i) => (
+        {prices.length > 0 && [minPrice, (minPrice + maxPrice) / 2, maxPrice].map((price, i) => (
           <text
             key={i}
             x={padding - 8}
@@ -196,24 +215,43 @@ export function MainStockChart() {
             dominantBaseline="middle"
             fontFamily="monospace"
           >
-            ${price.toFixed(0)}
+            ₹{price.toFixed(0)}
           </text>
         ))}
       </svg>
 
       <div className="flex justify-between mt-4 px-2">
-        {["1M", "5M", "15M", "1H", "4H", "1D"].map((tf, i) => (
+        {["1M", "5M", "15M", "1H", "1D", "1W"].map((tf, i) => (
           <button
             key={tf}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               i === 2
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
                 : "text-gray-500 hover:text-white hover:bg-white/5"
             }`}
           >
             {tf}
           </button>
         ))}
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
+        <div>
+          <p className="text-gray-500 text-xs uppercase">Open</p>
+          <p className="text-white font-mono">₹{openPrice.toFixed(2)}</p>
+        </div>
+        <div>
+          <p className="text-gray-500 text-xs uppercase">High</p>
+          <p className="text-emerald-400 font-mono">₹{(maxPrice).toFixed(2)}</p>
+        </div>
+        <div>
+          <p className="text-gray-500 text-xs uppercase">Low</p>
+          <p className="text-red-400 font-mono">₹{(minPrice).toFixed(2)}</p>
+        </div>
+        <div>
+          <p className="text-gray-500 text-xs uppercase">Volume</p>
+          <p className="text-white font-mono">{(Math.random() * 10 + 5).toFixed(2)}M</p>
+        </div>
       </div>
     </motion.div>
   );
