@@ -4,18 +4,29 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { INDIAN_STOCKS, generateRealisticStockData, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
 
+const TIMEFRAMES = [
+  { label: "1M", interval: "1min", points: 60 },
+  { label: "5M", interval: "5min", points: 60 },
+  { label: "15M", interval: "15min", points: 60 },
+  { label: "1H", interval: "60min", points: 60 },
+  { label: "1D", interval: "daily", points: 30 },
+  { label: "1W", interval: "weekly", points: 52 },
+];
+
 export function MainStockChart() {
   const [data, setData] = useState<TimeSeriesData[]>([]);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [openPrice, setOpenPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [selectedStockIndex, setSelectedStockIndex] = useState(0);
+  const [selectedTimeframe, setSelectedTimeframe] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const lastFetchRef = useRef<number>(0);
 
   const stock = INDIAN_STOCKS[selectedStockIndex];
+  const timeframe = TIMEFRAMES[selectedTimeframe];
 
   const fetchStockData = useCallback(async (symbol: string) => {
     const now = Date.now();
