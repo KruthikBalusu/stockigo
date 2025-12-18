@@ -1,0 +1,14 @@
+{
+    "$schema": "https://openapi.vercel.com/schema.json",
+    "builds": [
+        {
+            "src": "next.config.js",
+            "use": "@vercel/next"
+        }
+    ],
+    "functions": {
+        "src/app/api/**/*.ts": {
+            "memory": 1024
+        }
+    }
+}
