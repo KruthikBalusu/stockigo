@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY || "demo";
 
-async function searchYahoo(query: string) {
-  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query&multiQuoteQueryId=multi_quote_single_token_query`;
+async function searchYahoo(query: string, market: string) {
+  const searchQuery = market === "IN" ? `${query}.NS ${query}.BO` : query;
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchQuery)}&quotesCount=30&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query`;
 
   const response = await fetch(url, {
     headers: {
