@@ -1,34 +1,7 @@
 import { NextResponse } from "next/server";
 
-const STOCK_SYMBOLS: Record<string, { nse: string; name: string; basePrice: number }> = {
-  "RELIANCE": { nse: "RELIANCE.NS", name: "Reliance Industries", basePrice: 2890 },
-  "RELIANCE.BSE": { nse: "RELIANCE.NS", name: "Reliance Industries", basePrice: 2890 },
-  "TCS": { nse: "TCS.NS", name: "Tata Consultancy", basePrice: 4150 },
-  "TCS.BSE": { nse: "TCS.NS", name: "Tata Consultancy", basePrice: 4150 },
-  "HDFCBANK": { nse: "HDFCBANK.NS", name: "HDFC Bank", basePrice: 1520 },
-  "HDFCBANK.BSE": { nse: "HDFCBANK.NS", name: "HDFC Bank", basePrice: 1520 },
-  "INFY": { nse: "INFY.NS", name: "Infosys", basePrice: 1780 },
-  "INFY.BSE": { nse: "INFY.NS", name: "Infosys", basePrice: 1780 },
-  "ICICIBANK": { nse: "ICICIBANK.NS", name: "ICICI Bank", basePrice: 1120 },
-  "ICICIBANK.BSE": { nse: "ICICIBANK.NS", name: "ICICI Bank", basePrice: 1120 },
-  "HINDUNILVR": { nse: "HINDUNILVR.NS", name: "Hindustan Unilever", basePrice: 2450 },
-  "HINDUNILVR.BSE": { nse: "HINDUNILVR.NS", name: "Hindustan Unilever", basePrice: 2450 },
-  "SBIN": { nse: "SBIN.NS", name: "State Bank of India", basePrice: 780 },
-  "SBIN.BSE": { nse: "SBIN.NS", name: "State Bank of India", basePrice: 780 },
-  "BHARTIARTL": { nse: "BHARTIARTL.NS", name: "Bharti Airtel", basePrice: 1680 },
-  "BHARTIARTL.BSE": { nse: "BHARTIARTL.NS", name: "Bharti Airtel", basePrice: 1680 },
-  "ITC": { nse: "ITC.NS", name: "ITC Limited", basePrice: 465 },
-  "ITC.BSE": { nse: "ITC.NS", name: "ITC Limited", basePrice: 465 },
-  "KOTAKBANK": { nse: "KOTAKBANK.NS", name: "Kotak Mahindra Bank", basePrice: 1780 },
-  "KOTAKBANK.BSE": { nse: "KOTAKBANK.NS", name: "Kotak Mahindra Bank", basePrice: 1780 },
-  "LT": { nse: "LT.NS", name: "Larsen & Toubro", basePrice: 3420 },
-  "LT.BSE": { nse: "LT.NS", name: "Larsen & Toubro", basePrice: 3420 },
-  "AXISBANK": { nse: "AXISBANK.NS", name: "Axis Bank", basePrice: 1150 },
-  "AXISBANK.BSE": { nse: "AXISBANK.NS", name: "Axis Bank", basePrice: 1150 },
-};
-
 async function fetchYahooFinanceData(symbol: string) {
-  const nseSymbol = STOCK_SYMBOLS[symbol]?.nse || `${symbol}.NS`;
+  const nseSymbol = symbol.includes(".") ? symbol : `${symbol}.NS`;
   
   const period2 = Math.floor(Date.now() / 1000);
   const period1 = period2 - 7 * 24 * 60 * 60;
@@ -50,7 +23,7 @@ async function fetchYahooFinanceData(symbol: string) {
 }
 
 async function fetchYahooQuote(symbol: string) {
-  const nseSymbol = STOCK_SYMBOLS[symbol]?.nse || `${symbol}.NS`;
+  const nseSymbol = symbol.includes(".") ? symbol : `${symbol}.NS`;
   
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${nseSymbol}?interval=1d&range=1d`;
   
@@ -108,9 +81,6 @@ export async function GET(request: Request) {
   const interval = searchParams.get("interval") || "5min";
   
   symbol = symbol.replace(".BSE", "").replace(".NS", "");
-  
-  const stockInfo = STOCK_SYMBOLS[symbol] || STOCK_SYMBOLS[`${symbol}.BSE`];
-  const basePrice = stockInfo?.basePrice || 1000;
 
   try {
     const yahooData = await fetchYahooFinanceData(symbol);
@@ -140,7 +110,7 @@ export async function GET(request: Request) {
         success: true,
         data: formattedData,
         symbol,
-        name: stockInfo?.name || symbol,
+        name: meta?.shortName || meta?.longName || symbol,
         interval,
         market: "NSE",
         source: "yahoo_finance",
@@ -154,7 +124,7 @@ export async function GET(request: Request) {
     
     throw new Error("Invalid Yahoo Finance response");
   } catch (error) {
-    console.log("Yahoo Finance error, using dynamic data:", error);
+    console.log("Yahoo Finance error, trying quote:", error);
     
     try {
       const quoteData = await fetchYahooQuote(symbol);
@@ -168,7 +138,7 @@ export async function GET(request: Request) {
           success: true,
           data: dynamicData,
           symbol,
-          name: stockInfo?.name || symbol,
+          name: meta?.shortName || meta?.longName || symbol,
           interval,
           market: "NSE",
           source: "yahoo_quote_with_dynamic",
@@ -180,19 +150,13 @@ export async function GET(request: Request) {
         });
       }
     } catch {
-      console.log("Quote fetch also failed, using fully dynamic data");
+      console.log("Quote fetch also failed");
     }
     
-    const dynamicData = generateDynamicData(basePrice, 60);
-    
     return NextResponse.json({
-      success: true,
-      data: dynamicData,
+      success: false,
+      error: "Could not fetch stock data",
       symbol,
-      name: stockInfo?.name || symbol,
-      interval,
-      market: "NSE",
-      source: "dynamic",
-    });
+    }, { status: 404 });
   }
 }
