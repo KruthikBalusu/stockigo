@@ -4,15 +4,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { INDIAN_STOCKS, generateRealisticStockData, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
 
-const DEMO_STOCKS = [
-  { symbol: "IBM", name: "IBM Corporation", basePrice: 180 },
-  { symbol: "AAPL", name: "Apple Inc", basePrice: 175 },
-  { symbol: "MSFT", name: "Microsoft Corp", basePrice: 420 },
-  { symbol: "GOOGL", name: "Alphabet Inc", basePrice: 175 },
-  { symbol: "AMZN", name: "Amazon.com Inc", basePrice: 185 },
-  { symbol: "TSLA", name: "Tesla Inc", basePrice: 245 },
-];
-
 export function MainStockChart() {
   const [data, setData] = useState<TimeSeriesData[]>([]);
   const [currentPrice, setCurrentPrice] = useState(0);
@@ -20,13 +11,11 @@ export function MainStockChart() {
   const [priceChange, setPriceChange] = useState(0);
   const [selectedStockIndex, setSelectedStockIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [useRealData, setUseRealData] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const lastFetchRef = useRef<number>(0);
 
-  const stocks = useRealData ? DEMO_STOCKS : INDIAN_STOCKS;
-  const stock = stocks[selectedStockIndex];
+  const stock = INDIAN_STOCKS[selectedStockIndex];
 
   const fetchStockData = useCallback(async (symbol: string) => {
     const now = Date.now();
@@ -49,7 +38,6 @@ export function MainStockChart() {
         setOpenPrice(firstPrice);
         setCurrentPrice(lastPrice);
         setPriceChange(((lastPrice - firstPrice) / firstPrice) * 100);
-        setUseRealData(true);
       } else {
         setApiError(result.error || "Failed to fetch");
         const fallbackData = generateRealisticStockData(stock.basePrice, 60);
@@ -71,9 +59,9 @@ export function MainStockChart() {
   }, [data.length, stock.basePrice]);
 
   useEffect(() => {
-    const s = stocks[selectedStockIndex];
+    const s = INDIAN_STOCKS[selectedStockIndex];
     fetchStockData(s.symbol);
-  }, [selectedStockIndex, stocks, fetchStockData]);
+  }, [selectedStockIndex, fetchStockData]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -125,7 +113,6 @@ export function MainStockChart() {
 
   const isPositive = priceChange >= 0;
   const mainColor = isPositive ? "#00ff88" : "#ff4444";
-  const currencySymbol = useRealData ? "$" : "₹";
 
   return (
     <motion.div
@@ -136,7 +123,7 @@ export function MainStockChart() {
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2 flex-wrap">
-          {stocks.slice(0, 6).map((s, i) => (
+          {INDIAN_STOCKS.slice(0, 6).map((s, i) => (
             <button
               key={s.symbol}
               onClick={() => setSelectedStockIndex(i)}
@@ -146,7 +133,7 @@ export function MainStockChart() {
                   : "text-gray-500 hover:text-white hover:bg-white/5 border border-transparent"
               }`}
             >
-              {s.symbol}
+              {s.symbol.replace(".BSE", "")}
             </button>
           ))}
         </div>
@@ -161,11 +148,11 @@ export function MainStockChart() {
         <div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">{stock.symbol.slice(0, 3)}</span>
+              <span className="text-white font-bold text-xs">{stock.symbol.replace(".BSE", "").slice(0, 3)}</span>
             </div>
             <div>
               <h2 className="text-white font-bold text-xl tracking-tight">{stock.name}</h2>
-              <p className="text-gray-500 text-sm">{stock.symbol} • {useRealData ? "NYSE/NASDAQ" : "NSE/BSE"}</p>
+              <p className="text-gray-500 text-sm">{stock.symbol} • NSE/BSE</p>
             </div>
           </div>
         </div>
@@ -180,13 +167,13 @@ export function MainStockChart() {
                 animate={{ scale: 1 }}
                 className="text-3xl font-bold text-white font-mono"
               >
-                {currencySymbol}{currentPrice.toFixed(2)}
+                ₹{currentPrice.toFixed(2)}
               </motion.div>
               <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
                 <span>{isPositive ? "▲" : "▼"}</span>
                 <span className="font-mono">{Math.abs(priceChange).toFixed(2)}%</span>
                 <span className="text-gray-500 text-sm ml-2">
-                  ({isPositive ? "+" : ""}{currencySymbol}{((currentPrice - openPrice)).toFixed(2)})
+                  ({isPositive ? "+" : ""}₹{((currentPrice - openPrice)).toFixed(2)})
                 </span>
               </div>
             </>
@@ -282,7 +269,7 @@ export function MainStockChart() {
             dominantBaseline="middle"
             fontFamily="monospace"
           >
-            {currencySymbol}{price.toFixed(0)}
+            ₹{price.toFixed(0)}
           </text>
         ))}
       </svg>
@@ -305,15 +292,15 @@ export function MainStockChart() {
       <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
         <div>
           <p className="text-gray-500 text-xs uppercase">Open</p>
-          <p className="text-white font-mono">{currencySymbol}{openPrice.toFixed(2)}</p>
+          <p className="text-white font-mono">₹{openPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs uppercase">High</p>
-          <p className="text-emerald-400 font-mono">{currencySymbol}{maxPrice.toFixed(2)}</p>
+          <p className="text-emerald-400 font-mono">₹{maxPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs uppercase">Low</p>
-          <p className="text-red-400 font-mono">{currencySymbol}{minPrice.toFixed(2)}</p>
+          <p className="text-red-400 font-mono">₹{minPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs uppercase">Volume</p>
