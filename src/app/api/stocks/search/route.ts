@@ -74,10 +74,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const yahooData = await searchYahoo(query, market);
+    const directVerify = await verifySymbol(query.toUpperCase());
+    
+    const yahooData = await searchYahoo(query);
     const quotes = yahooData?.quotes || [];
 
-    const results = quotes
+    let results = quotes
       .filter((q: { exchange?: string; quoteType?: string; symbol?: string }) => {
         if (market === "IN") {
           return (
@@ -100,6 +102,10 @@ export async function GET(request: Request) {
       .filter((r: { symbol: string }, index: number, self: { symbol: string }[]) => 
         r.symbol && self.findIndex(s => s.symbol === r.symbol) === index
       );
+
+    if (directVerify && !results.find((r: { symbol: string }) => r.symbol === directVerify.symbol)) {
+      results = [directVerify, ...results];
+    }
 
     return NextResponse.json({
       success: true,
