@@ -11,6 +11,8 @@ interface FloatingNumber {
   isPositive: boolean;
 }
 
+const stockSymbols = ["RELIANCE", "TCS", "HDFC", "INFY", "ICICI", "SBIN", "ITC", "LT", "AXIS"];
+
 export function FloatingNumbers() {
   const [numbers, setNumbers] = useState<FloatingNumber[]>([]);
 
@@ -19,12 +21,14 @@ export function FloatingNumbers() {
     const interval = setInterval(() => {
       const isPositive = Math.random() > 0.45;
       const value = (Math.random() * 5).toFixed(2);
+      const showSymbol = Math.random() > 0.6;
+      const symbol = stockSymbols[Math.floor(Math.random() * stockSymbols.length)];
       
       setNumbers(prev => [
         ...prev.slice(-15),
         {
           id: id++,
-          value: `${isPositive ? "+" : "-"}${value}%`,
+          value: showSymbol ? symbol : `${isPositive ? "+" : "-"}₹${(Math.random() * 50).toFixed(0)}`,
           x: Math.random() * 90 + 5,
           y: Math.random() * 80 + 10,
           isPositive,
