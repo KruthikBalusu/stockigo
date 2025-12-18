@@ -82,12 +82,12 @@ export default function Home() {
           transition={{ delay: 1 }}
           className="mt-10 flex gap-4"
         >
-          <button className="px-8 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/25">
+          <a href="/trading" className="px-8 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/25">
             Start Trading
-          </button>
-          <button className="px-8 py-3 bg-white/5 border border-white/10 rounded-xl font-semibold text-white hover:bg-white/10 transition-all">
+          </a>
+          <a href="/analysis" className="px-8 py-3 bg-white/5 border border-white/10 rounded-xl font-semibold text-white hover:bg-white/10 transition-all">
             View Analysis
-          </button>
+          </a>
         </motion.div>
       </main>
     </div>
