@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { INDIAN_STOCKS, generateLivePrice, TimeSeriesData } from "@/lib/stockApi";
+import { generateLivePrice, TimeSeriesData, searchStocks, StockSearchResult } from "@/lib/stockApi";
 
 interface StockAnalysis {
   symbol: string;
@@ -46,27 +46,31 @@ export default function AnalysisPage() {
   const [stocks, setStocks] = useState<StockAnalysis[]>([]);
   const [selectedStock, setSelectedStock] = useState<StockAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
 
   const fetchAllStocks = useCallback(async () => {
     setIsLoading(true);
-    const stockDataPromises = INDIAN_STOCKS.slice(0, 8).map(async (stock) => {
+    const defaultSymbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL", "ITC"];
+    
+    const stockDataPromises = defaultSymbols.map(async (symbol) => {
       try {
-        const response = await fetch(`/api/stocks?symbol=${stock.symbol}&interval=5min`);
+        const response = await fetch(`/api/stocks?symbol=${symbol}&interval=5min`);
         const result = await response.json();
         
         if (result.success && result.data?.length > 0) {
           const data = result.data;
           const prices = data.map((d: TimeSeriesData) => d.close);
-          const firstPrice = data[0]?.open || stock.basePrice;
-          const lastPrice = prices[prices.length - 1] || stock.basePrice;
+          const firstPrice = data[0]?.open || 1000;
+          const lastPrice = prices[prices.length - 1] || 1000;
           const change = lastPrice - firstPrice;
           const changePercent = (change / firstPrice) * 100;
           const rsi = calculateRSI(prices);
           const signal = generateSignal(rsi, changePercent);
           
           return {
-            symbol: stock.symbol.replace(".BSE", ""),
-            name: stock.name,
+            symbol: symbol,
+            name: result.name || symbol,
             price: lastPrice,
             change,
             changePercent,
@@ -81,28 +85,13 @@ export default function AnalysisPage() {
           };
         }
       } catch (e) {
-        console.error(`Failed to fetch ${stock.symbol}:`, e);
+        console.error(`Failed to fetch ${symbol}:`, e);
       }
       
-      const rsi = 45 + Math.random() * 20;
-      return {
-        symbol: stock.symbol.replace(".BSE", ""),
-        name: stock.name,
-        price: stock.basePrice,
-        change: 0,
-        changePercent: 0,
-        signal: "hold" as const,
-        strength: 50,
-        rsi,
-        macd: 0,
-        support: stock.basePrice * 0.97,
-        resistance: stock.basePrice * 1.03,
-        prediction: "Data unavailable",
-        data: [],
-      };
+      return null;
     });
 
-    const results = await Promise.all(stockDataPromises);
+    const results = (await Promise.all(stockDataPromises)).filter(Boolean) as StockAnalysis[];
     setStocks(results);
     if (results.length > 0) setSelectedStock(results[0]);
     setIsLoading(false);
@@ -121,6 +110,67 @@ export default function AnalysisPage() {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchQuery.length >= 2) {
+        const results = await searchStocks(searchQuery);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const addStockToAnalysis = async (symbol: string, name: string) => {
+    if (stocks.find(s => s.symbol === symbol)) {
+      setSelectedStock(stocks.find(s => s.symbol === symbol) || null);
+      setSearchQuery("");
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/stocks?symbol=${symbol}&interval=5min`);
+      const result = await response.json();
+      
+      if (result.success && result.data?.length > 0) {
+        const data = result.data;
+        const prices = data.map((d: TimeSeriesData) => d.close);
+        const firstPrice = data[0]?.open || 1000;
+        const lastPrice = prices[prices.length - 1] || 1000;
+        const change = lastPrice - firstPrice;
+        const changePercent = (change / firstPrice) * 100;
+        const rsi = calculateRSI(prices);
+        const signal = generateSignal(rsi, changePercent);
+        
+        const newStock: StockAnalysis = {
+          symbol,
+          name: result.name || name,
+          price: lastPrice,
+          change,
+          changePercent,
+          signal,
+          strength: Math.abs(rsi - 50) * 2,
+          rsi,
+          macd: (Math.random() - 0.5) * 20,
+          support: lastPrice * 0.97,
+          resistance: lastPrice * 1.03,
+          prediction: signal === "buy" ? "Bullish momentum expected" : signal === "sell" ? "Bearish correction likely" : "Consolidation phase",
+          data,
+        };
+        
+        setStocks(prev => [...prev, newStock]);
+        setSelectedStock(newStock);
+      }
+    } catch (e) {
+      console.error(`Failed to fetch ${symbol}:`, e);
+    }
+    
+    setSearchQuery("");
+    setSearchResults([]);
+  };
 
   const SignalBadge = ({ signal }: { signal: "buy" | "sell" | "hold" }) => {
     const colors = {
@@ -189,6 +239,30 @@ export default function AnalysisPage() {
             <h1 className="text-3xl font-bold mb-2">AI Stock Analysis</h1>
             <p className="text-gray-400">Technical indicators and AI-powered predictions</p>
           </motion.div>
+
+          <div className="mb-6 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search any stock to analyze (e.g., TATASTEEL, WIPRO, MARUTI)..."
+              className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50"
+            />
+            {searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-black/95 border border-white/10 rounded-xl max-h-64 overflow-y-auto z-20">
+                {searchResults.map((result) => (
+                  <button
+                    key={result.symbol}
+                    onClick={() => addStockToAnalysis(result.symbol, result.name)}
+                    className="w-full px-4 py-3 text-left hover:bg-white/10 flex justify-between items-center border-b border-white/5 last:border-0"
+                  >
+                    <span className="text-white font-medium">{result.symbol}</span>
+                    <span className="text-gray-400 text-sm truncate ml-2">{result.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
